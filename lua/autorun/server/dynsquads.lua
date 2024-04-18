@@ -1,5 +1,3 @@
-if not CLIENT then
-
 local blacklistedClasses = { -- one of these crashed my session during testing so they wont be involved 
     ["npc_manhack"] = true,
     ["npc_sniper"] = true,
@@ -824,5 +822,3 @@ local function dynSquadPasteSquad( _, Entity, Data )
     end )
 end
 duplicator.RegisterEntityModifier( "dynsquads_squadinfo", dynSquadPasteSquad )
-
-end
