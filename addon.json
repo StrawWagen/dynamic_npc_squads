@@ -1,0 +1,11 @@
+{
+  "title": "Dynamic NPC Squads",
+  "type": "ServerContent",
+  "tags": [
+    "fun",
+    "roleplay"
+  ],
+  "ignore": [
+    "readme.*"
+  ]
+}
