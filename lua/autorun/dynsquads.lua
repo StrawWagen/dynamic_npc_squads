@@ -16,6 +16,20 @@ local COND_HEAR_DANGER = 50
 
 local showprints = CreateConVar( "npc_dynsquads_showprints", 0, FCVAR_ARCHIVE, "Show dynsquad system prints in console, Debug.", 0, 1 )
 local dosquads = CreateConVar( "npc_dynsquads_dosquads", 1, FCVAR_ARCHIVE, "Enable/disable dynsquad system.", 0, 1 )
+CreateConVar( "npc_dynsquads_dowandering", 1, FCVAR_ARCHIVE, "Should dynsquads wander around the map?" )
+CreateConVar( "npc_dynsquads_doassaults", 1, FCVAR_ARCHIVE, "Should dynsquads call for backup?" )
+
+local dowanderingBool = nil
+cvars.AddChangeCallback( "npc_dynsquads_dowandering", function( _, _, new )
+    dowanderingBool = tobool( new )
+
+end, "dynsquads_detectchange" )
+
+local doassaultingBool = nil
+cvars.AddChangeCallback( "npc_dynsquads_doassaults", function( _, _, new )
+    doassaultingBool = tobool( new )
+
+end, "dynsquads_detectchange" )
 
 local interruptConditions = {
     COND_NEW_ENEMY,
@@ -538,7 +552,7 @@ local function npcDoSquadThink( me )
         if alert then
             npcAlertThink( me )
         end
-        if not alert and ableToAct and me:IsCurrentSchedule( SCHED_IDLE_STAND ) then
+        if not alert and ableToAct and dowanderingBool and me:IsCurrentSchedule( SCHED_IDLE_STAND ) then
             npcWanderForward( me, me )
         end
     elseif soloSquad then
@@ -563,7 +577,10 @@ local function npcDoSquadThink( me )
                 end
                 dynLeaderContact( me, myEnemy or nil )
             elseif idle then
-                local point = me.cachedPoint
+                local point
+                if doassaultingBool then
+                    point = me.cachedPoint
+                end
                 if point then
                     local point2 = Vector()
                     local myPos2 = Vector()
@@ -593,7 +610,7 @@ local function npcDoSquadThink( me )
                         me.nextCacheAttempt = CurTime() + math.random( 1, 3 )
                     end
                 end
-                if not me.cachedPoint and ( me.dynLastAlertTime or 0 ) < CurTime() then
+                if dowanderingBool and not me.cachedPoint and ( me.dynLastAlertTime or 0 ) < CurTime() then
                     if me.dynLastAlertTime then 
                         if ( me.playedBeginWanderSound or 0 ) ~= me.dynLastAlertTime then 
                             npcPlaySound( me, "beganwandering" )
@@ -609,7 +626,10 @@ local function npcDoSquadThink( me )
         end
 
     elseif IsValid( myLeader ) and not aboveCapacity then
-        local leadersPoint = myLeader.cachedPoint
+        local leadersPoint
+        if doassaultingBool then
+            leadersPoint = myLeader.cachedPoint
+        end
         if ableToAct then
             local leaderPos = myLeader:GetPos()
             local sqrDistToLeader = myPos:DistToSqr( leaderPos )
@@ -630,7 +650,7 @@ local function npcDoSquadThink( me )
                     local leaderDirToMe = dirToPos( leaderPos, myPos )
                     local pos1 = leadersPoint + ( leaderDirToMe * math.random( 50, 150 ) )
                     npcPathRunToPos( me, pos1 )
-                else
+                elseif dowanderingBool then
                     npcWanderForward( me, me )
                 end
             elseif sqrDistGreaterThan( sqrDistToLeader, 500 ) and not alert and ( me.nextReturnBackToLeader or 0 ) < CurTime() and idle then
@@ -648,10 +668,10 @@ local function npcDoSquadThink( me )
                 end
                 if sqrDistGreaterThan( sqrDistToLeader, 600 ) then
                     npcStandWatch( me, myLeader )
-                else
+                elseif dowanderingBool then
                     local time = math.random( 3, 18 )
-                    me.nextReturnBackToLeader = CurTime() + time 
-                    me.standWatchLine = CurTime() + math.Clamp( time - 5, 2, math.huge ) 
+                    me.nextReturnBackToLeader = CurTime() + time
+                    me.standWatchLine = CurTime() + math.Clamp( time - 5, 2, math.huge )
                     npcWanderForward( me, myLeader )
                 end
             elseif not alert and not myLeader.isWandering and idle then -- edge case
@@ -661,7 +681,7 @@ local function npcDoSquadThink( me )
                 end
                 if sqrDistGreaterThan( sqrDistToLeader, 600 ) then
                     npcStandWatch( me, myLeader )
-                else
+                elseif dowanderingBool then
                     local time = math.random( 20, 40 )
                     if math.random( 0, 100 ) > 90 then
                         time = time * math.Rand( 3, 6 )
