@@ -14,11 +14,8 @@ local COND_LIGHT_DAMAGE = 17
 local COND_HEAVY_DAMAGE = 18
 local COND_HEAR_DANGER = 50
 
-local showprints = "npc_dynsquads_showprints"
-local dosquads = "npc_dynsquads_dosquads"
-
-CreateConVar( showprints, 0, FCVAR_ARCHIVE, "Show dynsquad system prints in console, Debug.", 0, 1 )
-CreateConVar( dosquads, 1, FCVAR_ARCHIVE, "Enable/disable dynsquad system.", 0, 1 )
+local showprints = CreateConVar( "npc_dynsquads_showprints", 0, FCVAR_ARCHIVE, "Show dynsquad system prints in console, Debug.", 0, 1 )
+local dosquads = CreateConVar( "npc_dynsquads_dosquads", 1, FCVAR_ARCHIVE, "Enable/disable dynsquad system.", 0, 1 )
 
 local interruptConditions = {
     COND_NEW_ENEMY,
@@ -294,7 +291,7 @@ local function dynSquadNpcBranchOff( me )
     npcSetDynSquad( me, "dyn_" .. me:GetCreationID() ) -- invent new squads
     table.insert( dynSquadLeaders, me )
     me.LeaderPromotionTime = CurTime()
-    if GetConVar( showprints ):GetBool() then
+    if showprints:GetBool() then
         print( "newsquad " .. "dyn_" .. me:GetCreationID() )
     end
 end
@@ -510,7 +507,7 @@ end
 -- main function that loops on every npc with a valid squad, everything above is for this
 local function npcDoSquadThink( me )
     if not IsValid( me ) then return end
-    if not GetConVar( dosquads ):GetBool() then return true end
+    if not dosquads:GetBool() then return true end
     local squad = npcSquad( me )
     if not squad then return end
     if not dynSquadValid( me, squad ) then return end
@@ -717,7 +714,7 @@ end
 
 -- on tick incrimental function that slowly chips away at big tasks
 local function dynSquadThink()
-    if not GetConVar( dosquads ):GetBool() then return end
+    if not dosquads:GetBool() then return end
 
     if newBuildReady and newBuildTime < CurTime() then
         newBuildReady = false 
@@ -745,7 +742,7 @@ local function dynSquadThink()
 
             transferCounts = {}
 
-            if GetConVar( showprints ):GetBool() then
+            if showprints:GetBool() then
                 PrintTable( dynSquadCounts )
             end
         end
