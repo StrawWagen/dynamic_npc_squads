@@ -1,4 +1,4 @@
-if not CLIENT then 
+if not CLIENT then
 
 local blacklistedClasses = { -- one of these crashed my session during testing so they wont be involved 
     ["npc_manhack"] = true,
@@ -108,8 +108,10 @@ local newBuildTime = 0
 local newBuildReady = true
 local doingBuild = false
 
+local aiDisabled = GetConVar( "ai_disabled" )
+
 local function enabledAi()
-    return GetConVar("ai_disabled"):GetInt() == 0
+    return aiDisabled:GetInt() == 0
 end
 
 local function dirToPos( startPos, endPos )
@@ -131,7 +133,7 @@ local function sqrDistLessThan( Dist1, Dist2 )
 end
 
 
-local function npcHasConditions( npc, conditions ) 
+local function npcHasConditions( npc, conditions )
     if not IsValid( npc ) then return false end
     if not istable( conditions ) then return false end
     local has = false
@@ -213,7 +215,7 @@ local function npcSetDynSquad( npc, squad )
 
     npc.dynamicSquad = squad
     npc:SetSquad( squad )
-    local count = dynSquadCounts[ squad ] or 0 
+    local count = dynSquadCounts[ squad ] or 0
     dynSquadCounts[ squad ] = count + 1
 
     local dupeData = { ["squadname"] = squad, ["isleader"] = false }
@@ -221,19 +223,18 @@ local function npcSetDynSquad( npc, squad )
 
     local leader = ai.GetSquadLeader( squad )
     if not IsValid( leader ) then return end
-    local count = ai.GetSquadMemberCount( squad )
-    local dupeData = { ["squadname"] = squad, ["isleader"] = true }
+    dupeData = { ["squadname"] = squad, ["isleader"] = true }
     duplicator.StoreEntityModifier( leader, "dynsquads_squadinfo", dupeData )
 end
 
 local function sortEntsByDistanceTo( toSort, checkPos )
     local toReturn = toSort
     table.sort( toReturn, function( a, b )
-        if not IsValid( a ) then return false end 
-        if not IsValid( b ) then return true end 
+        if not IsValid( a ) then return false end
+        if not IsValid( b ) then return true end
         local ADist = a:GetPos():DistToSqr( checkPos )
         local BDist = b:GetPos():DistToSqr( checkPos )
-        return ADist < BDist 
+        return ADist < BDist
     end )
     return toReturn
 end
@@ -245,7 +246,7 @@ local function npcsAreChummy( chummer, chummee )
     local chummersType = type( chummer )
     local chummeesType = type( chummee )
     local dispToChummee = chummer:Disposition( chummee )
-    local sameTypeAndNeutral = chummeesType == chummersType and dispToChummee == D_NU  
+    local sameTypeAndNeutral = chummeesType == chummersType and dispToChummee == D_NU
     local likesOrIndifferent = dispToChummee == D_LI or sameTypeAndNeutral
     return likesOrIndifferent
 end
@@ -285,7 +286,7 @@ local function dynSquadFindAcceptingLeader( me )
             if currCount ~= nil and currSquad and not isMe and chummyToLeader then
                 local atCapacity = currCount >= maxSquadSize
 
-                if not atCapacity then 
+                if not atCapacity then
                     if math.random( 0, 100 ) > 70 then
                         npcPlaySound( me, "joinednewleader" )
                     end
@@ -322,7 +323,7 @@ local function dynSquadAutoTransfer( me, currentSquad )
             me.blockedJoins = ( me.blockedJoins or 0 ) - 1
             if me.blockedJoins > -0 then return end
             me.blockedJoins = nil
-            me.dupedAsFollower = nil 
+            me.dupedAsFollower = nil
         else
             dynSquadNpcBranchOff( me )
             me.dynSquadInBacklog = nil
@@ -421,7 +422,7 @@ end
 local function teamCheck( npc )
     if npc.dynSquadTeam then return end
     local done = false
-    for currentIndex, currentNpc in ipairs( allNpcs ) do
+    for _, currentNpc in ipairs( allNpcs ) do
         done = teamCheck2( npc, currentNpc )
         if done then break end
     end
@@ -440,7 +441,7 @@ local function saveFlankPoint( npc, pos )
     currentTable[identifier] = pos
     teamFlankPoints[dynTeam] = currentTable
     --PrintTable( currentTable ) 
-end 
+end
 
 local function saveReinforcePoint( npc, pos )
     local dynTeam = npc.dynSquadTeam
@@ -449,7 +450,7 @@ local function saveReinforcePoint( npc, pos )
     if not istable( currentTable ) then return end
     currentTable[identifier] = pos
     teamReinforcePoints[dynTeam] = currentTable
-end 
+end
 
 local function npcFillPointCache( npc, pointType )
     local currentTable = nil
@@ -484,7 +485,7 @@ local function npcFillPointCache( npc, pointType )
     npc.oldCachedPoint = point
 
     return true
-end 
+end
 
 local function saveEnemyContact( me, enemy )
     local enemyPos = enemy:GetPos()
@@ -500,7 +501,7 @@ local function npcCanSavePoint( me, checkPos )
     local pos1 = me.lastSavedAssaultPos or Vector()
     local goodDist = sqrDistGreaterThan( pos1:DistToSqr( checkPos ), minDistBetweenAssaults )
     if not goodDist then return false end
-    return true 
+    return true
 end
 
 local function dynLeaderContact( me, enemy )
@@ -542,7 +543,7 @@ local function npcDoSquadThink( me )
 
     local old = ( me.LeaderPromotionTime or 0 ) + dynSquadMinAssembleTime < CurTime()
     local smallAndOld = count <= 1 and old
-    local caps = me:CapabilitiesGet() 
+    local caps = me:CapabilitiesGet()
     local canUseWeapon = bit.band( caps, CAP_USE_WEAPONS ) > 0
     local isArmed = #me:GetWeapons() > 0
     local canSquad = bit.band( caps, CAP_SQUAD ) > 0
@@ -560,7 +561,7 @@ local function npcDoSquadThink( me )
     elseif amLeader then
         if smallAndOld then
             local blocks = me.blockedDissolves or 0
-            if blocks > 0 then 
+            if blocks > 0 then
                 me.blockedDissolves = blocks - 1
             else
                 me.blockedDissolves = nil
@@ -604,22 +605,20 @@ local function npcDoSquadThink( me )
                     local choices = { [0] = "flank", [1] = "reinforce" }
                     local choice = choices[ math.random( 0, 1 ) ]
                     local success = npcFillPointCache( me, choice )
-                    if me.cachedPoint and not me.wasTraversingToAssault then
+                    if success and me.cachedPoint and not me.wasTraversingToAssault then
                         npcPlaySound( me, "acquireassault" )
                     else
                         me.nextCacheAttempt = CurTime() + math.random( 1, 3 )
                     end
                 end
                 if dowanderingBool and not me.cachedPoint and ( me.dynLastAlertTime or 0 ) < CurTime() then
-                    if me.dynLastAlertTime then 
-                        if ( me.playedBeginWanderSound or 0 ) ~= me.dynLastAlertTime then 
-                            npcPlaySound( me, "beganwandering" )
-                            me.playedBeginWanderSound = me.dynLastAlertTime
-                        end
+                    if me.dynLastAlertTime and ( me.playedBeginWanderSound or 0 ) ~= me.dynLastAlertTime then
+                        npcPlaySound( me, "beganwandering" )
+                        me.playedBeginWanderSound = me.dynLastAlertTime
                     end
                     me.isWandering = true
                     npcWanderForward( me, me )
-                end 
+                end
             else
                 me.isWandering = nil
             end
@@ -633,7 +632,7 @@ local function npcDoSquadThink( me )
         if ableToAct then
             local leaderPos = myLeader:GetPos()
             local sqrDistToLeader = myPos:DistToSqr( leaderPos )
-            if alert then 
+            if alert then
                 npcAlertThink( me )
             elseif leadersPoint then
                 local nextNotify = me.nextPointNotify or 0
@@ -643,9 +642,9 @@ local function npcDoSquadThink( me )
                     npcPlaySound( me, "movingtoassault" )
                 end
                 local reachedPoint = ( me.reachedPoint or Vector() )
-                if reachedPoint ~= leadersPoint then 
+                if reachedPoint ~= leadersPoint then
                     if sqrDistLessThan( myPos:DistToSqr( leadersPoint ), 400 ) then
-                        me.reachedPoint = leadersPoint 
+                        me.reachedPoint = leadersPoint
                     end
                     local leaderDirToMe = dirToPos( leaderPos, myPos )
                     local pos1 = leadersPoint + ( leaderDirToMe * math.random( 50, 150 ) )
@@ -688,7 +687,7 @@ local function npcDoSquadThink( me )
 
                     end
                     me.nextReturnBackToLeader = CurTime() + time
-                    me.standWatchLine = CurTime() + math.Clamp( time - 10, 2, math.huge ) 
+                    me.standWatchLine = CurTime() + math.Clamp( time - 10, 2, math.huge )
                     npcWanderForward( me, myLeader )
                 end
             end
@@ -704,18 +703,18 @@ local function npcDoSquadThink( me )
     if IsValid( blocker ) then
         tellToMove( me, blocker )
     end
-    return true 
+    return true
 end
 
 
 -- store a npc in the correct tables
-local function dynSquadThinkProcessNpc( npc, index )
+local function dynSquadThinkProcessNpc( npc )
     if not IsValid( npc ) then return end
     local squad = npcSquad( npc )
     if not squad then return end
     table.insert( allNpcs2, npc )
 
-    if npc.dynHasBeenProcessed then 
+    if npc.dynHasBeenProcessed then
         teamCheck( npc )
     else
         npc.dynHasBeenProcessed = true
@@ -737,7 +736,7 @@ local function dynSquadThink()
     if not dosquads:GetBool() then return end
 
     if newBuildReady and newBuildTime < CurTime() then
-        newBuildReady = false 
+        newBuildReady = false
         newBuildTime = CurTime() + dynSquadMinAssembleTime
         doingBuild = true
 
@@ -750,7 +749,7 @@ local function dynSquadThink()
     elseif doingBuild then
         local max = #cachedNpcs
         if buildIndex <= max then
-            dynSquadThinkProcessNpc( cachedNpcs[ buildIndex ], buildIndex )
+            dynSquadThinkProcessNpc( cachedNpcs[ buildIndex ] )
             buildIndex = buildIndex + 1
         elseif buildIndex > max then
             doingBuild = false
@@ -758,7 +757,7 @@ local function dynSquadThink()
 
             dynSquadLeaders = dynSquadLeaders2
             dynSquadCounts = dynSquadCounts2
-            allNpcs = allNpcs2 
+            allNpcs = allNpcs2
 
             transferCounts = {}
 
@@ -767,7 +766,7 @@ local function dynSquadThink()
             end
         end
     end
-end 
+end
 
 hook.Add( "Tick", "STRAW_brainsbase_dynsquadthink", dynSquadThink )
 
@@ -780,7 +779,7 @@ end
 
 local function timerSetup( me )
     if not IsValid( me ) then return end
-    local identifier = me:GetCreationID() .. "STRAW_brainsbase_npcdynsquadthink" 
+    local identifier = me:GetCreationID() .. "STRAW_brainsbase_npcdynsquadthink"
     timer.Create( identifier, 1.5, math.huge, function()
         if not IsValid( me ) then timer.Remove( identifier ) return end
         local good = npcDoSquadThink( me )
@@ -792,7 +791,7 @@ end
 local function dynSquadAcquire( entity )
     if not SERVER then return end
     if not IsValid( entity ) then return end
-    timer.Simple( 0.1, function() 
+    timer.Simple( 0.1, function()
         if not IsValid( entity ) then return end
         local squad = npcSquad( entity )
         if not isstring( squad ) then return end
@@ -801,7 +800,7 @@ local function dynSquadAcquire( entity )
         local delay = entity.dynSquadDelay or 0
         local rand = math.random( 0, 1500 ) / 1000
 
-        timer.Simple( rand + delay, function() 
+        timer.Simple( rand + delay, function()
             dynSquadInitializeNpc( entity )
             timerSetup( entity )
         end )
@@ -811,15 +810,15 @@ end
 hook.Add( "OnEntityCreated", "STRAW_brainsbase_dynsquadacquire", dynSquadAcquire )
 
 -- sort of dupe support
-local function dynSquadPasteSquad( Player, Entity, Data )
+local function dynSquadPasteSquad( _, Entity, Data )
     timer.Simple( 0.08, function()
         if not Entity then return end
         if not istable( Data ) then return end
         if Data["isleader"] then
             Entity.dupedAsLeader = true
             Entity.blockedDissolves = 10
-        else 
-            Entity.dupedAsFollower = true 
+        else
+            Entity.dupedAsFollower = true
             Entity.blockedJoins = 10
         end
     end )
