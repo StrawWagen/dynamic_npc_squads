@@ -3,6 +3,9 @@ local CurTime = CurTime
 local math = math
 local hook_Run = hook.Run
 
+-- dont use the global vector_origin, some addon is bound to have messed it up 
+local vec_zero = Vector( 0, 0, 0 )
+
 DYN_NPC_SQUADS = DYN_NPC_SQUADS or {}
 
 local blacklistedClasses = { -- one of these crashed my session during testing so they wont be involved 
@@ -199,6 +202,7 @@ local aiDisabled = GetConVar( "ai_disabled" )
 
 local function enabledAi()
     return aiDisabled:GetInt() == 0
+
 end
 
 local function dirToPos( startPos, endPos )
@@ -222,11 +226,13 @@ end
 local function sqrDistGreaterThan( Dist1, Dist2 )
     Dist2 = Dist2 ^ 2
     return Dist1 > Dist2
+
 end
 
 local function sqrDistLessThan( Dist1, Dist2 )
     Dist2 = Dist2 ^ 2
     return Dist1 < Dist2
+
 end
 
 
@@ -238,9 +244,11 @@ local function npcHasConditions( npc, conditions )
         if npc:HasCondition( currentCondition ) then
             has = true
             break
+
         end
     end
     return has
+
 end
 
 local function npcIsAlert( npc )
@@ -248,15 +256,19 @@ local function npcIsAlert( npc )
     local myState = npc:GetNPCState()
     local alert = npcHasConditions( npc, interruptConditions ) or IsValid( npc:GetEnemy() ) or myState == NPC_STATE_ALERT or myState == NPC_STATE_COMBAT
     return alert
+
 end
 
 local function npcSquad( npc )
     if not IsValid( npc ) then return nil end
+
     local vals = npc:GetKeyValues()
     local squad = vals["squadname"]
     if not squad then return nil end
     if not isstring( squad ) then return nil end
+
     return squad
+
 end
 
 local nextHumanProcessedLines = {}
@@ -308,6 +320,7 @@ function DYN_NPC_SQUADS.NpcPlaySound( npc, soundKey )
 
             else
                 line = linesData
+
             end
         end
 
@@ -372,6 +385,7 @@ function DYN_NPC_SQUADS.NpcPlaySound( npc, soundKey )
     end
     if developerBool then
         debugoverlay.Text( npc:GetPos(), "speak " .. tostring( soundKey ), 2, true )
+
     end
 end
 
@@ -383,6 +397,7 @@ local function npcSetDynSquad( npc, squad )
     if oldSquad ~= "" then
         local oldCount = dynSquadCounts[ oldSquad ] or 0
         dynSquadCounts[ oldSquad ] = math.Clamp( oldCount + -1, 0, math.huge )
+
     end
 
     npc.dynamicSquad = squad
@@ -411,8 +426,10 @@ local function sortEntsByDistanceTo( toSort, checkPos )
         local ADist = a:GetPos():DistToSqr( checkPos )
         local BDist = b:GetPos():DistToSqr( checkPos )
         return ADist < BDist
+
     end )
     return toReturn
+
 end
 
 -- are npcs friendly?
@@ -431,6 +448,7 @@ function DYN_NPC_SQUADS.NpcsAreChummy( chummer, chummee )
     local likesOrIndifferent = likedBothWays or sameTypeAndNeutral
 
     return likesOrIndifferent
+
 end
 
 -- get oot me way mate!
@@ -449,8 +467,6 @@ local function dynSquadFindAcceptingLeader( me )
     local sortedLeaders = sortEntsByDistanceTo( dynSquadLeaders, me:GetPos() )
     local success = false
 
-    local currMaxSize = maxSquadSize
-
     for _, currentLeader in ipairs( sortedLeaders ) do
         if IsValid( currentLeader ) then
             local radius = 1500
@@ -458,11 +474,7 @@ local function dynSquadFindAcceptingLeader( me )
 
             if failures >= 4 then
                 radius = 30000
-                local count = dynSquadCounts[npcSquad( me )] or 1
-                if count <= 1 then
-                    currMaxSize = maxSquadSize + 1
 
-                end
             end
 
             local isTooFar = sqrDistGreaterThan( me:GetPos():DistToSqr( currentLeader:GetPos() ), radius )
@@ -474,13 +486,13 @@ local function dynSquadFindAcceptingLeader( me )
             local isMe = currentLeader == me
 
             if currCount ~= nil and currSquad and not isMe and chummyToLeader then
-                local atCapacity = currCount >= currMaxSize
+                local atCapacity = currCount >= maxSquadSize
 
                 if not atCapacity then
                     DYN_NPC_SQUADS.NpcPlaySound( me, "joinednewleader" )
                     npcSetDynSquad( me, currSquad )
                     success = true
-                    me.findLeaderFailures = 0
+                    me.findLeaderFailures = nil
                     break
 
                 end
@@ -488,6 +500,7 @@ local function dynSquadFindAcceptingLeader( me )
         end
     end
     return success
+
 end
 
 -- make a new squad 
@@ -502,6 +515,7 @@ local function dynSquadNpcBranchOff( me )
     npcSetDynSquad( me, "dyn_" .. me:GetCreationID() ) -- invent new squads
     table.insert( dynSquadLeaders, me )
     me.LeaderPromotionTime = CurTime()
+
 end
 
 -- find a squad leader that takes us on, else just make a new squad
@@ -516,6 +530,7 @@ local function dynSquadAutoTransfer( me, currentSquad )
         dynSquadNpcBranchOff( me )
         me.dynSquadInBacklog = nil
         if npcIsAlert( me ) then return end
+
         DYN_NPC_SQUADS.NpcPlaySound( me, "inventedsquadcalm" )
 
     else
@@ -527,7 +542,9 @@ local function dynSquadAutoTransfer( me, currentSquad )
         if myCount > 1 and myCount < maxSquadSize then return end
         dynSquadNpcBranchOff( me )
         if npcIsAlert( me ) then return end
+
         DYN_NPC_SQUADS.NpcPlaySound( me, "inventedsquadcalm" )
+
     end
 end
 
@@ -541,6 +558,7 @@ end
 
 local function canDynSquadsMove( me, state )
     state = state or me:GetNPCState()
+    if me:IsCurrentSchedule( -1 ) then return end
     if state == NPC_STATE_SCRIPT then return end
     if me.dynSquads_DontMove and me.dynSquads_DontMove > CurTime() then return end
 
@@ -588,7 +606,7 @@ local function npcPathRunToPos( me, pos )
 
     local setTheSched
     local fail = SCHED_FAIL
-    local lastGoPos = me.dynLastGoRunPosition or Vector()
+    local lastGoPos = me:GetGoalPos() or vec_zero
     local goodMoving = me:IsCurrentSchedule( goRun ) and sqrDistLessThan( lastGoPos:DistToSqr( pos ), 250 )
     local isCondition = npcHasConditions( me, interruptConditions )
 
@@ -599,7 +617,6 @@ local function npcPathRunToPos( me, pos )
         setTheSched = true
 
         me:SetSchedule( goRun )
-        me.dynLastGoRunPosition = pos
         me.wasDoingConfirmedDynsquadsGo = true
 
     else
@@ -609,6 +626,7 @@ local function npcPathRunToPos( me, pos )
     end
 
     return true, setTheSched
+
 end
 
 local function npcStandWatch( me, myLeader )
@@ -659,7 +677,6 @@ local function npcStandWatch( me, myLeader )
     -- nowhere good to look, fallback
     local asAngle = awayFromLeader:Angle()
     me:SetIdealYawAndUpdate( asAngle.yaw, 1 )
-    return
 
 end
 
@@ -669,6 +686,7 @@ local function newDynTeam( npc )
     npc.dynSquadTeam = DYN_NPC_SQUADS.dynSquadTeamIndex
     DYN_NPC_SQUADS.teamFlankPoints[npc.dynSquadTeam] = {}
     DYN_NPC_SQUADS.teamReinforcePoints[npc.dynSquadTeam] = {}
+
 end
 
 local function teamCheck2( npc1, npc2 )
@@ -676,6 +694,7 @@ local function teamCheck2( npc1, npc2 )
     if not IsValid( npc2 ) then return false end
     if not npc2.dynSquadTeam then return false end
     if not DYN_NPC_SQUADS.NpcsAreChummy( npc1, npc2 ) then return false end
+
     npc1.dynSquadTeam = npc2.dynSquadTeam
     return true
 
@@ -687,6 +706,7 @@ local function teamCheck( npc )
     for _, currentNpc in ipairs( DYN_NPC_SQUADS.allNpcs ) do
         done = teamCheck2( npc, currentNpc )
         if done then break end
+
     end
     if done then return end
     newDynTeam( npc )
@@ -729,12 +749,14 @@ end
 -- "flank", its literally just the enemy's pos....
 local function saveFlankPoint( npc, pos )
     local dynTeam = npc.dynSquadTeam
+    if not dynTeam then return end
     addPoint( DYN_NPC_SQUADS.teamFlankPoints, dynTeam, CurTime(), pos )
 
 end
 
 local function saveReinforcePoint( npc, pos )
     local dynTeam = npc.dynSquadTeam
+    if not dynTeam then return end
     addPoint( DYN_NPC_SQUADS.teamReinforcePoints, dynTeam, CurTime(), pos )
 
 end
@@ -790,8 +812,10 @@ local function npcFillPointCache( npc, pointType )
 
     if pointType == "flank" then
         currentTable = DYN_NPC_SQUADS.teamFlankPoints[dynTeam]
+
     elseif pointType == "reinforce" then
         currentTable = DYN_NPC_SQUADS.teamReinforcePoints[dynTeam]
+
     end
 
     if not istable( currentTable ) then return false end
@@ -828,24 +852,18 @@ local function npcFillPointCache( npc, pointType )
 
     if pointType == "flank" then
         DYN_NPC_SQUADS.teamFlankPoints[dynTeam] = currentTable
+
     elseif pointType == "reinforce" then
         DYN_NPC_SQUADS.teamReinforcePoints[dynTeam] = currentTable
+
     end
 
     if not point then return false end
     if point and not isvector( point ) then return false end
 
-    local old = npc.oldCachedPoint or Vector()
-    local myPos2 = Vector()  local point2 = Vector()
-    point2:SetUnpacked( point.x, point.y, 0 )
-    myPos2:SetUnpacked( old.x, old.y, 0 )
-    local distBetweenPoints = point2:DistToSqr( myPos2 )
-    if sqrDistLessThan( distBetweenPoints, 800 ) then return false end
-
     npc.cachedPoint = point
-    npc.oldCachedPoint = point
+    return true, point
 
-    return true
 end
 
 local function saveEnemyContact( me, enemy )
@@ -881,23 +899,24 @@ local function npcCanSavePoint( me )
     local oldHealth = me.oldSquadMemberHealth or 0
     me.oldSquadMemberHealth = currHealth
     local losingHealth = currHealth < oldHealth
-
     if losingHealth then return true end
 
     local currCount = #members
     local oldCount = me.oldSquadMemberCount or 0
     me.oldSquadMemberCount = currCount
     local losingMembers = currCount < oldCount
-
     if losingMembers then return true end
+
     return false
 
 end
 
 local function dynLeaderContact( me, enemy )
     if not IsValid( enemy ) then return end
+
     local canSavePoint = npcCanSavePoint( me )
     if not canSavePoint then return end
+
     saveEnemyContact( me, enemy )
 
 end
@@ -911,9 +930,6 @@ local function npcAlertThink( npc )
     end
 end
 
-
-local vec_zero = Vector( 0, 0, 0 )
-
 -- main function that loops on every npc with a valid squad, everything above is for this
 -- return nil to treat it as a halting error, and teardown the timer for this npc.
 -- return true to keep the timer running
@@ -926,10 +942,18 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     if hook_Run( "dynsquads_blocksquadthinking", me ) == true then return true end
 
     local squad = npcSquad( me )
+    -- stop here if npc doesnt have "squadname" keyvalue
     if not squad then return end
+
+    -- stop this if some other system set the squad of the npc
     if not dynSquadValid( me, squad ) then return end
 
-    local ableToAct = enabledAi() and not me:IsCurrentSchedule( -1 )
+    local caps = me:CapabilitiesGet()
+    local canSquad = bit.band( caps, CAP_SQUAD ) >= 1
+    if not canSquad then return end
+
+    local myState = me:GetNPCState()
+    local ableToAct = enabledAi() and canDynSquadsMove( me )
     local count = dynSquadCounts[squad] or 0
     local myLeader = ai.GetSquadLeader( squad )
     local amLeader = me:IsSquadLeader()
@@ -943,11 +967,10 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     local old = ( me.LeaderPromotionTime or 0 ) + dynSquadMinAssembleTime < CurTime()
     local smallAndOld = count <= 1 and old
-    local caps = me:CapabilitiesGet()
+
     local canUseWeapon = bit.band( caps, CAP_USE_WEAPONS ) >= 1
     local hasWep = #me:GetWeapons() > 0
     local isArmed = hasWep or bit.band( caps, CAP_INNATE_RANGE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_RANGE_ATTACK1 ) >= 1
-    local canSquad = bit.band( caps, CAP_SQUAD ) >= 1
 
     local distMul = 1
     -- flying npcs can go far from their leaders
@@ -956,25 +979,20 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     end
 
-    if not canSquad then return end
-
-    local myState = me:GetNPCState()
-    -- wait...
-    if not canDynSquadsMove( me, state ) then return end
-
     local alert = npcIsAlert( me )
     local lastAlertTime = ( me.dynLastAlertTime or 0 )
 
     local fearfulness = 0
-    -- combine are basically machines
+    -- combine are basically machines, so they all go IDLE at the same time 
     if string.find( me:GetModel(), "models/combine_so" ) then
         fearfulness = 2
 
-    -- makes different npcs start wandering at different times
+    -- human person, go idle at a big spread of times
     elseif string.find( me:GetModel(), "human" ) or string.find( me:GetModel(), "metro" ) then
         fearfulness = me:GetCreationID() % 10
         fearfulness = fearfulness + 5
 
+    -- fallback/generic case
     else
         fearfulness = math.Clamp( 100 - me:Health(), 0, 100 ) + me:GetCreationID() % 4
         fearfulness = fearfulness / 10
@@ -983,51 +1001,53 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     local idle = noEnemy and lastAlertTime + fearfulness < CurTime() and ( myState == NPC_STATE_IDLE or myState == NPC_STATE_ALERT ) -- ""idle""
 
+    -- eg, npc_citizen no weapons
     if canUseWeapon and not isArmed then
         if alert then
             npcAlertThink( me )
+
         end
         if not alert and ableToAct and dowanderingBool and me:IsCurrentSchedule( SCHED_IDLE_STAND ) then
             npcWanderForward( me, me )
             if math.random( 1, 100 ) < 5 then
                 DYN_NPC_SQUADS.NpcPlaySound( me, "ambientwander" )
+
             end
         end
+    -- can i plz be lead
     elseif soloSquad then
         dynSquadFindAcceptingLeader( me )
+
     elseif amLeader then
         if smallAndOld then
-            local blocks = me.blockedDissolves or 0
-            if blocks > 0 then
-                me.blockedDissolves = blocks - 1
-            else
-                me.blockedDissolves = nil
-                dynSquadFindAcceptingLeader( me )
-            end
+            dynSquadFindAcceptingLeader( me )
+
         end
         if ableToAct then
             if idle then
-                local point
-                if doassaultingBool then
-                    point = me.cachedPoint
-                end
-                if point then
+                local point = me.cachedPoint
+                if doassaultingBool and point then
                     if shouldClearAssaultpoint( me, myPos, point ) then
                         me.cachedPoint = nil
                         me.assaultAttempts = nil
                         me.wasTraversingToAssault = nil
+                        DYN_NPC_SQUADS.NpcPlaySound( me, "reachedassault" )
+
                         if developerBool then
                             debugoverlay.Text( myPos, "assaultclear", 5, true )
                             debugoverlay.Line( myPos, point, 5 )
+
                         end
-                        DYN_NPC_SQUADS.NpcPlaySound( me, "reachedassault" )
+                    -- goto the assault
                     else
+                        -- this assault aint workin!
                         local attempts = me.assaultAttempts or 0
                         if attempts > 15 then
                             me.cachedPoint = nil
                             if developerBool then
                                 debugoverlay.Text( myPos, "assaultfail", 20, true )
                                 debugoverlay.Line( myPos, point, 20, Color( 255, 0, 0 ), true )
+
                             end
                         end
 
@@ -1035,6 +1055,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         if setTheSched and developerBool then
                             debugoverlay.Text( myPos, "assaulted", 10, true )
                             debugoverlay.Line( myPos, point, 10, color_white, true )
+
                         end
 
                         if setTheSched and me.wasTraversingToAssault then
@@ -1044,53 +1065,63 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         me.wasTraversingToAssault = true
 
                     end
-                elseif not point and me.wasTraversingToAssault then
+                elseif doassaultingBool and not point and me.wasTraversingToAssault then
                     npcCancelGo( me )
+
                 elseif doassaultingBool and not point and ( me.nextCacheAttempt or 0 ) < CurTime() then
                     local choices = { [0] = "flank", [1] = "reinforce" }
                     local choice = choices[ math.random( 0, 1 ) ]
-                    local success = npcFillPointCache( me, choice )
-                    if success and me.cachedPoint and not me.wasTraversingToAssault then
+
+                    local success, newPoint = npcFillPointCache( me, choice )
+                    if success and newPoint then
+                        point = newPoint
+
+                    end
+
+                    if success and point and not me.wasTraversingToAssault then
                         DYN_NPC_SQUADS.NpcPlaySound( me, "acquireassault" )
+
                     else
                         me.nextCacheAttempt = CurTime() + math.random( 1, 3 )
+
                     end
                 end
-                if dowanderingBool and not me.cachedPoint and ( me.dynLastAlertTime or 0 ) < CurTime() then
+                if dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
+                    me.isWandering = true
+                    npcWanderForward( me, me )
+
                     if me.dynLastAlertTime and ( me.playedBeginWanderSound or 0 ) ~= me.dynLastAlertTime then
                         DYN_NPC_SQUADS.NpcPlaySound( me, "beganwandering" )
                         me.playedBeginWanderSound = me.dynLastAlertTime
+
                     elseif math.random( 1, 100 ) < 10 then
                         DYN_NPC_SQUADS.NpcPlaySound( me, "ambientwander" )
+
                     end
-                    me.isWandering = true
-                    npcWanderForward( me, me )
                 end
             elseif alert then
                 npcAlertThink( me )
+                dynLeaderContact( me, myEnemy or nil )
                 if me.wasTraversingToAssault then
                     me.wasTraversingToAssault = nil
                     me.isWandering = nil
                     DYN_NPC_SQUADS.NpcPlaySound( me, "reachedhotassault" )
+
                 end
-                dynLeaderContact( me, myEnemy or nil )
             else
                 me.isWandering = nil
+
             end
         end
-
     elseif IsValid( myLeader ) and not aboveCapacity then
-        local leadersPoint
-        if doassaultingBool then
-            leadersPoint = myLeader.cachedPoint
-        end
+        local leadersPoint = myLeader.cachedPoint
         if ableToAct then
             local leadersRealPos = myLeader:GetPos()
             local whereLeaderWantsUs
 
             local canReturnToLeader = ( me.nextReturnBackToLeader or 0 ) < CurTime()
 
-            local leadersGoal = myLeader:GetCurWaypointPos()
+            local leadersGoal = myLeader:GetGoalPos()
             if leadersGoal and leadersGoal ~= vec_zero then
                 whereLeaderWantsUs = leadersGoal
 
@@ -1098,12 +1129,11 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                 whereLeaderWantsUs = leadersRealPos
 
             end
-
             local leaderDirToMe = dirToPos( whereLeaderWantsUs, myPos )
             whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * 100 )
 
             local compareToLeaderWants
-            local whereIllEndUp = me:GetCurWaypointPos()
+            local whereIllEndUp = me:GetGoalPos()
             if whereIllEndUp and whereIllEndUp ~= vec_zero then
                 compareToLeaderWants = whereIllEndUp
 
@@ -1111,21 +1141,22 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                 compareToLeaderWants = myPos
 
             end
-
             local distToWhereLeaderWants = compareToLeaderWants:DistToSqr( whereLeaderWantsUs )
             local sqrDistToLeader = myPos:DistToSqr( leadersRealPos )
+
             -- im not doing anything, get close to my leader!
             if idle and canReturnToLeader and sqrDistGreaterThan( distToWhereLeaderWants, 500 * distMul ) then
                 local returnToLeader = true
                 -- makes the followers go from shellshocked after a fight, to wander faster
                 local fearfulnessStopHuddling = fearfulness + 8
+
                 if me.lastFightFinished ~= me.dynLastAlertTime and ( lastAlertTime + fearfulnessStopHuddling < CurTime() ) then
                     me:SetNPCState( NPC_STATE_IDLE )
                     me.lastFightFinished = me.dynLastAlertTime
                     DYN_NPC_SQUADS.NpcPlaySound( me, "beganwandering" )
 
-                    -- block return randomly if we began wandering
-                    returnToLeader = math.random( 1, 100 ) < 50
+                    -- block return randomly if we just began wandering
+                    returnToLeader = math.random( 1, 100 ) < 40
 
                 end
                 if returnToLeader then
@@ -1138,28 +1169,27 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
             -- fight
             elseif alert then
                 npcAlertThink( me )
+
             -- leader is assaulting
-            elseif leadersPoint and canDynSquadsMove( myLeader ) then
+            elseif doassaultingBool and leadersPoint and canDynSquadsMove( myLeader ) then
+                -- handle "follow the leader!" sounds
                 local nextNotify = me.nextPointNotify or 0
                 if leadersPoint ~= me.notifedPoint and nextNotify < CurTime() then
                     me.nextPointNotify = CurTime() + 12
                     me.notifedPoint = leadersPoint
                     DYN_NPC_SQUADS.NpcPlaySound( me, "movingtoassault" )
-                end
-                local reachedPoint = me.reachedPoint
-                -- only build a path when the leader's point changes
-                if reachedPoint ~= leadersPoint then
-                    if sqrDistLessThan( myPos:DistToSqr( leadersPoint ), 400 * distMul ) then
-                        me.reachedPoint = leadersPoint
-                    end
-                    local goal = leadersPoint + ( leaderDirToMe * math.random( 50, 150 ) )
-                    -- dont rebuild the path if we're already there, or going there
-                    if sqrDistGreaterThan( compareToLeaderWants:DistToSqr( goal ), 200 ) then
-                        npcPathRunToPos( me, goal )
 
-                    end
+                end
+
+                -- meet up with the leader at the assault pos
+                if sqrDistGreaterThan( myPos:DistToSqr( leadersPoint ), 400 * distMul ) then
+                    local goal = leadersPoint + ( leaderDirToMe * math.random( 50, 150 ) )
+                    npcPathRunToPos( me, goal )
+
+                -- we got there before the leader
                 elseif dowanderingBool then
                     npcWanderForward( me, me )
+
                 end
             -- walk with leader
             elseif idle then
@@ -1185,11 +1215,13 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         npcPathRunToPos( me, whereLeaderWantsUs )
 
                     end
+                -- close to the leader, walk alongside them
                 elseif dowanderingBool then
                     me.wasStandingWatch = nil
                     local time = math.random( 2, 8 )
                     me.nextReturnBackToLeader = CurTime() + time
                     npcWanderForward( me, myLeader )
+
                 end
             end
         end
@@ -1199,23 +1231,21 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     end
     if IsValid( blocker ) then
         tellToMove( me, blocker )
+
     end
     return true
+
 end
 
 
 -- store a npc in the correct tables
 local function dynSquadThinkProcessNpc( npc )
     if not IsValid( npc ) then return end
+
     local squad = npcSquad( npc )
     if not squad then return end
-    table.insert( allNpcs2, npc )
 
-    if npc.dynHasBeenProcessed then
-        teamCheck( npc )
-    else
-        npc.dynHasBeenProcessed = true
-    end
+    table.insert( allNpcs2, npc )
 
     local currCount = dynSquadCounts2[squad] or 0
     dynSquadCounts2[squad] = currCount + 1
@@ -1226,6 +1256,7 @@ local function dynSquadThinkProcessNpc( npc )
 
     if not leaderOrSmall then return end
     table.insert( dynSquadLeaders2, npc )
+
 end
 
 -- on tick incrimental function that slowly chips away at big tasks
@@ -1248,6 +1279,7 @@ local function dynSquadThink()
         if buildIndex <= max then
             dynSquadThinkProcessNpc( cachedNpcs[ buildIndex ] )
             buildIndex = buildIndex + 1
+
         elseif buildIndex > max then
             doingBuild = false
             newBuildReady = true
@@ -1267,6 +1299,7 @@ hook.Add( "Tick", "STRAW_dynamic_npc_squads_think", dynSquadThink )
 local function dynSquadInitializeNpc( me )
     if not IsValid( me ) then return end
     table.insert( DYN_NPC_SQUADS.allNpcs, me )
+    teamCheck( me )
     -- pasted in!
     if me.dynamicSquad then
         me:SetSquad( me.dynamicSquad )
@@ -1280,10 +1313,12 @@ end
 
 local function timerSetup( me )
     if not IsValid( me ) then return end
+
     local identifier = me:GetCreationID() .. "STRAW_dynamic_npc_squads_think"
-    -- do one instant
+    -- do one instant think
     local goodInit = DYN_NPC_SQUADS.npcDoSquadThink( me )
     if not goodInit then return end
+
     -- then repeat
     timer.Create( identifier, 1.25, math.huge, function()
         if not IsValid( me ) then timer.Remove( identifier ) return end
@@ -1297,10 +1332,13 @@ end
 local function dynSquadAcquire( entity )
     if not SERVER then return end
     if not IsValid( entity ) then return end
+
     timer.Simple( 0.1, function()
         if not IsValid( entity ) then return end
+
         local squad = npcSquad( entity )
         if not isstring( squad ) then return end
+
         if blacklistedClasses[entity:GetClass()] then return end
 
         local rand = math.random( 0, 1500 ) / 10000
@@ -1320,7 +1358,10 @@ local function dynSquadPasteSquad( _, pasted, data )
     timer.Simple( 0, function()
         if not IsValid( pasted ) then return end
         if not istable( data ) then return end
+
         if data["squadname"] then
+            pasted.dynHasBeenProcessed = nil
+            pasted.dynSquadTeam = nil
             npcSetDynSquad( pasted, data["squadname"] )
 
         end
