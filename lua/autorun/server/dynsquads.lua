@@ -572,7 +572,7 @@ local function npcWanderForward( me, refent )
 
     if me:GetPathDistanceToGoal() > 25 then return end
     me:SetSchedule( SCHED_IDLE_WALK )
-    me:NavSetRandomGoal( 800, refent:GetAimVector() )
+    me:NavSetRandomGoal( 512, refent:GetAimVector() )
 
     -- debugoverlay.Line( me:GetPos(), me:GetPos() + ( refent:GetAimVector() * 100 ), 2, Color( 255, 255, 255 ) )
 
@@ -587,7 +587,7 @@ local function npcCancelGo( npc )
 
     local isSched = npc:IsCurrentSchedule( goRun )
     if isSched then
-        npc:SetSchedule( SCHED_ALERT_FACE )
+        npc:SetSchedule( SCHED_COMBAT_FACE )
 
     end
 end
@@ -713,7 +713,7 @@ local function teamCheck( npc )
 
 end
 
-local closeEnoughToWipe = 10^2
+local closeEnoughToWipe = 300^2
 local maxDuplicates = 2
 
 local function addPoint( points, theTeam, time, pos )
@@ -799,7 +799,7 @@ local function shouldClearAssaultpoint( me, myPos, theAssault )
     vecFor2dChecks2:SetUnpacked( myPos.x, myPos.y, 0 )
     local distToPoint = vecFor2dChecks:DistToSqr( vecFor2dChecks2 )
     local reallyClose = sqrDistLessThan( distToPoint, 300 )
-    local closeAndSee = sqrDistLessThan( distToPoint, 1000 ) and me:VisibleVec( theAssault + Vector( 0,0,40 ) )
+    local closeAndSee = sqrDistLessThan( distToPoint, 1500 ) and me:VisibleVec( theAssault + Vector( 0,0,40 ) )
     local clearThePos = reallyClose or closeAndSee or me:IsCurrentSchedule( SCHED_FAIL )
 
     return clearThePos
@@ -827,7 +827,7 @@ local function npcFillPointCache( npc, pointType )
     for placedTime, pos in SortedPairs( currentTable, true ) do
         local age = CurTime() - placedTime
         -- old and we found a good one already
-        if age > 480 and point then
+        if age > 240 and point then
             currentTable[placedTime] = nil
             if developerBool then
                 debugoverlay.Text( npcsPos, "staleassaultpurge", 5, true )
