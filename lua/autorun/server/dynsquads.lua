@@ -982,13 +982,14 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local alert = npcIsAlert( me )
     local lastAlertTime = ( me.dynLastAlertTime or 0 )
 
+    local myModel = me:GetModel()
     local fearfulness = 0
     -- combine are basically machines, so they all go IDLE at the same time 
-    if string.find( me:GetModel(), "models/combine_so" ) then
+    if myModel and string.find( myModel, "models/combine_so" ) then
         fearfulness = 2
 
     -- human person, go idle at a big spread of times
-    elseif string.find( me:GetModel(), "human" ) or string.find( me:GetModel(), "metro" ) then
+    elseif myModel and ( string.find( myModel, "human" ) or string.find( myModel, "metro" ) ) then
         fearfulness = me:GetCreationID() % 10
         fearfulness = fearfulness + 5
 

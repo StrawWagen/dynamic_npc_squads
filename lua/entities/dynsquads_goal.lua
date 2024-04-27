@@ -23,6 +23,7 @@ function ENT:SetupDataTables()
     self:NetworkVar( "Bool",    1, "On",    { KeyName = "on",   Edit = { readonly = true } } ) -- wire inputs internal
     if SERVER then
         self:SetOn( true )
+
     end
 end
 
@@ -89,7 +90,6 @@ function ENT:Think()
                     leader.dynSquads_DontMove = CurTime() + 5
 
                 end
-
                 break
 
             end
