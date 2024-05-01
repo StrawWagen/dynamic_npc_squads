@@ -12,21 +12,13 @@ local blacklistedClasses = { -- one of these crashed my session during testing s
     ["npc_manhack"] = true,
     ["npc_sniper"] = true,
     ["npc_rollermine"] = true
-}
 
-local COND_NEW_ENEMY = 26
-local COND_SEE_ENEMY = 10
-local COND_SEE_FEAR = 8
-local COND_ENEMY_DEAD = 30
-local COND_LIGHT_DAMAGE = 17
-local COND_HEAVY_DAMAGE = 18
-local COND_HEAR_DANGER = 50
+}
 
 local developer = CreateConVar( "npc_dynsquads_developer", 0, FCVAR_ARCHIVE, "Enable/disable 'developer 1' info?" )
 local doenable = CreateConVar( "npc_dynsquads_enabled", 1, FCVAR_ARCHIVE, "Enable/disable the entire 'dynamic npc squads' addon,", 0, 1 )
 local dowandering = CreateConVar( "npc_dynsquads_dowandering", 1, FCVAR_ARCHIVE, "Should dynsquads wander around the map?" )
 local doassaulting = CreateConVar( "npc_dynsquads_doassaults", 1, FCVAR_ARCHIVE, "Should dynsquads call for backup?" )
-local doyapping = CreateConVar( "npc_dynsquads_yapping", 1, FCVAR_ARCHIVE, "Should dynsquads make npcs yap?" )
 
 local enabledBool = doenable:GetBool()
 cvars.AddChangeCallback( "npc_dynsquads_enabled", function( _, _, new )
@@ -53,6 +45,15 @@ cvars.AddChangeCallback( "npc_dynsquads_doassaults", function( _, _, new )
 
 end, "dynsquads_detectchange" )
 
+local COND_NEW_ENEMY = 26
+local COND_SEE_ENEMY = 10
+local COND_SEE_FEAR = 8
+local COND_ENEMY_DEAD = 30
+local COND_LIGHT_DAMAGE = 17
+local COND_HEAVY_DAMAGE = 18
+local COND_HEAR_DANGER = 50
+
+-- stuff that we check to "interrupt" SCHED_FORCED_GO_RUN 
 local interruptConditions = {
     COND_NEW_ENEMY,
     COND_SEE_ENEMY,
@@ -61,118 +62,6 @@ local interruptConditions = {
     COND_LIGHT_DAMAGE,
     COND_HEAVY_DAMAGE,
     COND_HEAR_DANGER
-}
-
-local soundCategories = {
-    ["replytovort"] = {
-        ["models/humans/"] = { line = "human_vo/npc/_gender/vanswer_variants.wav", variants = 14, followerNoTalkChance = 0 },
-        ["models/vort"] = { lines = {
-            { line = "human_vo/npc/vortigaunt/vanswer_variants.wav", variants = 18 },
-            { line = "human_vo/npc/vortigaunt/vortigese_variants.wav", variants = 12 },
-        }, followerNoTalkChance = 0 }
-    },
-    ["replytohuman"] = {
-        ["models/humans/"] = { line = "human_vo/npc/_gender/answer_variants.wav", variants = 40, followerNoTalkChance = 0 },
-        ["models/vort"] = { line = "human_vo/npc/vortigaunt/vanswer_variants.wav", variants = 18, followerNoTalkChance = 0 }
-    },
-    ["acquireassault"] = {
-        ["backup"] = IdleSound,
-        ["models/police.mdl"] = "sent_METROPOLICE_HEARD_SOMETHING",
-        ["models/hunter.mdl"] = "NPC_Hunter.Scan",
-        ["models/combine_so"] = "sent_COMBINE_FLANK",
-        ["models/humans/"] = { line = "human_vo/npc/_gender/squad_away_variants.wav", variants = 3, globalDelay = 5 },
-    },
-    ["movingtoassault"] = {
-        ["backup"] = FoundEnemySound,
-        ["models/police.mdl"] = "sent_METROPOLICE_IDLE_ANSWER_CR",
-        ["models/hunter.mdl"] = "NPC_Hunter.Alert",
-        ["models/combine_so"] = "sent_COMBINE_ANSWER",
-        ["models/humans/"] = { lines = {
-            { line = "human_vo/npc/_gender/letsgo_variants.wav", variants = 2 },
-            { line = "human_vo/npc/_gender/ok_variants.wav", variants = 2 },
-        }, globalDelay = 1, followerNoTalkChance = 80 },
-    },
-    ["reachedassault"] = {
-        ["backup"] = LostEnemySound,
-        ["models/police.mdl"] = "sent_METROPOLICE_IDLE_CLEAR",
-        ["models/hunter.mdl"] = "NPC_Hunter.Idle",
-        ["models/combine_so"] = "sent_COMBINE_CLEAR",
-        ["models/humans/"] = { line = "human_vo/npc/_gender/question_variants.wav", variants = 31, skipChance = 50, globalDelay = 5 },
-    },
-    ["reachedhotassault"] = {
-        ["backup"] = FoundEnemySound,
-        ["models/police.mdl"] = "sent_METROPOLICE_GO_ALERT",
-        ["models/hunter.mdl"] = "NPC_Hunter.FoundEnemy",
-        ["models/combine_so"] = "sent_COMBINE_ALERT",
-        ["models/humans/"] = { lines = {
-            "human_vo/npc/_gender/incoming02.wav",
-            "human_vo/npc/_gender/goodgod.wav",
-            "human_vo/npc/_gender/ohno.wav",
-            "human_vo/npc/_gender/okimready03.wav",
-            "human_vo/npc/_gender/overthere02.wav",
-            "human_vo/npc/_gender/takecover02.wav",
-            "human_vo/npc/_gender/uhoh.wav",
-            "human_vo/npc/_gender/yeah02.wav",
-            "human_vo/npc/_gender/question26.wav",
-            "human_vo/npc/_gender/squad_affirm05.wav",
-            "human_vo/npc/_gender/squad_affirm06.wav",
-            "human_vo/npc/_gender/headsup01.wav",
-            "human_vo/npc/_gender/headsup02.wav",
-            "human_vo/trainyard/_gender/cit_window_use01.wav",
-        }, globalDelay = 15 },
-    },
-    ["joinednewleader"] = {
-        ["backup"] = IdleSound,
-        ["models/police.mdl"] = { line = "sent_METROPOLICE_IDLE_ANSWER", globalDelay = 5 },
-        ["models/hunter.mdl"] = { line = "npc/ministrider/hunter_idle2.wav", globalDelay = 5 },
-        ["models/combine_so"] = { line = "sent_COMBINE_ANSWER", globalDelay = 5 },
-        ["models/humans/"] = { line = "human_vo/npc/_gender/question_variants.wav", variants = 31, skipChance = 80, globalDelay = 5 },
-    },
-    ["inventedsquadcalm"] = {
-        ["backup"] = IdleSound,
-        ["models/police.mdl"] = "sent_METROPOLICE_IDLE",
-        ["models/hunter.mdl"] = "npc/ministrider/hunter_idle3.wav",
-        ["models/combine_so"] = "sent_COMBINE_CLEAR",
-        ["models/humans/"] = { line = "human_vo/npc/_gender/squad_away_variants.wav", variants = 3, skipChance = 50, globalDelay = 5 },
-    },
-    ["beganwandering"] = {
-        ["backup"] = LostEnemySound,
-        ["models/police.mdl"] = "sent_METROPOLICE_IDLE_CLEAR_CR",
-        ["models/hunter.mdl"] = "npc/ministrider/hunter_idle1.wav",
-        ["models/combine_so"] = "sent_COMBINE_LOST_LONG",
-        ["models/humans/"] = { lines = {
-            "human_vo/npc/_gender/finally.wav",
-            "human_vo/npc/_gender/gordead_ans01.wav",
-            "human_vo/npc/_gender/gordead_ans03.wav",
-            "human_vo/npc/_gender/gordead_ans04.wav",
-            "human_vo/npc/_gender/gordead_ans07.wav",
-            "human_vo/npc/_gender/gordead_ans15.wav",
-            "human_vo/npc/_gender/gordead_ans19.wav",
-            "human_vo/npc/_gender/gordead_ques02.wav",
-            "human_vo/npc/_gender/gordead_ques09.wav",
-            "human_vo/npc/_gender/gordead_ques11.wav",
-            "human_vo/npc/_gender/gordead_ques16.wav",
-            "human_vo/npc/_gender/gordead_ques19.wav",
-            "human_vo/npc/_gender/gordead_ques23.wav",
-            "human_vo/npc/_gender/gordead_ques25.wav",
-            "human_vo/npc/_gender/gordead_ques26.wav",
-            "human_vo/npc/_gender/gordead_ques30.wav",
-            "human_vo/npc/_gender/question02.wav",
-            "human_vo/npc/_gender/question09.wav",
-            "human_vo/npc/_gender/okimready01.wav",
-        }, variants = 2, skipChance = 50, globalDelay = 15 },
-    },
-    ["ambientwander"] = {
-        ["backup"] = LostEnemySound,
-        ["models/police.mdl"] = { line = "sent_METROPOLICE_IDLE_CR", globalDelay = 5 },
-        ["models/hunter.mdl"] = { line = "npc/ministrider/hunter_idle1.wav", globalDelay = 5 },
-        ["models/combine_so"] = { line = "sent_COMBINE_IDLE", globalDelay = 5 },
-        ["models/humans/"] = { lines = {
-            { line = "human_vo/npc/_gender/question_variants.wav", variants = 31 },
-            { line = "human_vo/npc/_gender/doingsomething.wav" },
-        }, skipChance = 60, globalDelay = 20 },
-        ["models/vort"] = { line = "human_vo/npc/vortigaunt/vques_variants.wav", variants = 10, skipChance = 65, globalDelay = 15 }
-    },
 }
 
 
@@ -205,11 +94,14 @@ local function enabledAi()
 
 end
 
-local function dirToPos( startPos, endPos )
+local function dirToPosFlat( startPos, endPos )
     if not startPos then return end
     if not endPos then return end
 
-    return ( endPos - startPos ):GetNormalized()
+    local subtractionResult = ( endPos - startPos )
+    subtractionResult.z = 0
+
+    return subtractionResult:GetNormalized()
 
 end
 
@@ -264,131 +156,17 @@ local function npcSquad( npc )
 
     local vals = npc:GetKeyValues()
     local squad = vals["squadname"]
+    if not squad and npc.GetSquad then
+        squad = npc:GetSquad()
+
+    end
+
     if not squad then return nil end
     if not isstring( squad ) then return nil end
 
     return squad
 
 end
-
-local nextHumanProcessedLines = {}
-local globalNextPlay = {}
-
-function DYN_NPC_SQUADS.NpcPlaySound( npc, soundKey )
-    if not doyapping:GetBool() then return end
-    if not enabledAi() then return end
-    if not IsValid( npc ) then return end
-    if npc:GetMaxHealth() > 0 and npc:Health() <= 0 then return end
-
-    local model = npc:GetModel()
-    model = string.lower( model )
-    local soundCategory = soundCategories[soundKey]
-
-    local playData = soundCategory["backup"]
-    for modelKey, playedAtModel in pairs( soundCategory ) do
-        if string.find( model, modelKey ) then
-            playData = playedAtModel
-            break
-
-        end
-    end
-
-    local toPlay
-    local followerNoTalkChance = 50
-
-    -- parse playdata tables
-    if istable( playData ) then
-        local skipChance = playData.skipChance
-        if skipChance and math.random( 1, 100 ) < skipChance then return end
-
-        if playData.followerNoTalkChance then
-            followerNoTalkChance = playData.followerNoTalkChance
-
-        end
-
-        local variants
-        local line
-        if playData.line then
-            line = playData.line
-            variants = playData.variants
-
-        elseif playData.lines then
-            local linesData = table.Random( playData.lines )
-            if istable( linesData ) then
-                line = linesData.line
-                variants = linesData.variants
-
-            else
-                line = linesData
-
-            end
-        end
-
-        local globalDelay = playData.globalDelay
-
-        playData = line
-
-        if istable( variants ) then
-            playData = string.Replace( playData, "_variants", table.Random( variants ) )
-
-        elseif isnumber( variants ) then
-            local variantAsStrNum = math.random( 1, variants )
-            if variantAsStrNum < 10 then
-                variantAsStrNum = "0" .. tostring( variantAsStrNum )
-
-            else
-                variantAsStrNum = tostring( variantAsStrNum )
-
-            end
-            playData = string.Replace( playData, "_variants", variantAsStrNum )
-
-        end
-
-        if globalDelay then
-            nextPlay = globalNextPlay[playData] or 0
-            if nextPlay > CurTime() then return end
-
-            globalNextPlay[playData] = CurTime() + globalDelay
-
-        end
-
-        --print( playData )
-
-    end
-
-    -- squad followers are quieter than leaders
-    if not npc:IsSquadLeader() and math.random( 1, 100 ) < followerNoTalkChance then return end
-
-    if isfunction( playData ) then
-        npc:playData()
-
-    elseif isstring( playData ) then
-        toPlay = playData
-        -- sentence
-        if string.StartWith( toPlay, "sent_" ) then
-            toPlay = string.Replace( toPlay, "sent_", "" )
-            npc:PlaySentence( toPlay, 0, 1 )
-
-        -- spaghetti rebel lines
-        elseif string.StartWith( toPlay, "human_" ) then
-            local nextLine = nextHumanProcessedLines[toPlay] or 0
-            if nextLine > CurTime() then return end
-            nextHumanProcessedLines[toPlay] = CurTime() + 10
-
-            toPlay = string.Replace( toPlay, "human_", "" )
-            DYN_NPC_SQUADS.HumanPlayLine( npc, toPlay )
-
-        else
-            npc:EmitSound( toPlay, 80, 100 )
-
-        end
-    end
-    if developerBool then
-        debugoverlay.Text( npc:GetPos(), "speak " .. tostring( soundKey ), 2, true )
-
-    end
-end
-
 
 local function npcSetDynSquad( npc, squad )
     if not IsValid( npc ) then return end
@@ -401,7 +179,16 @@ local function npcSetDynSquad( npc, squad )
     end
 
     npc.dynamicSquad = squad
-    npc:SetSquad( squad )
+    local vals = npc:GetKeyValues()
+
+    if npc.SetSquad then
+        npc:SetSquad( squad )
+
+    elseif vals["squadname"] then
+        npc:SetKeyValue( "squadname", squad )
+
+    end
+
     local count = dynSquadCounts[ squad ] or 0
     dynSquadCounts[ squad ] = count + 1
 
@@ -503,18 +290,33 @@ local function dynSquadFindAcceptingLeader( me )
 
 end
 
+local function dynSquadCanBranchOff( me )
+    local newName = "dyn_" .. me:GetCreationID()
+    if me.dynamicSquad == newName then return false, newName end
+    return true, newName
+
+end
+
+
 -- make a new squad 
 local function dynSquadNpcBranchOff( me )
+    local canBranch, newName = dynSquadCanBranchOff( me )
+    if not canBranch then return end
+
     if me.dynamicSquad then
         local oldSquad = npcSquad( me )
         local oldCount = dynSquadCounts[oldSquad]
-        dynSquadCounts[oldSquad] = oldCount + -1
+        if oldCount then
+            dynSquadCounts[oldSquad] = oldCount + -1
 
+        end
     end
 
-    npcSetDynSquad( me, "dyn_" .. me:GetCreationID() ) -- invent new squads
+    npcSetDynSquad( me, newName ) -- invent new squads
     table.insert( dynSquadLeaders, me )
     me.LeaderPromotionTime = CurTime()
+
+    return true
 
 end
 
@@ -527,8 +329,9 @@ local function dynSquadAutoTransfer( me, currentSquad )
         success = dynSquadFindAcceptingLeader( me )
         if success then return end
 
-        dynSquadNpcBranchOff( me )
         me.dynSquadInBacklog = nil
+        local didBranch = dynSquadNpcBranchOff( me )
+        if not didBranch then return end
         if npcIsAlert( me ) then return end
 
         DYN_NPC_SQUADS.NpcPlaySound( me, "inventedsquadcalm" )
@@ -540,7 +343,8 @@ local function dynSquadAutoTransfer( me, currentSquad )
 
         if success then return end
         if myCount > 1 and myCount < maxSquadSize then return end
-        dynSquadNpcBranchOff( me )
+        local didBranch = dynSquadNpcBranchOff( me )
+        if not didBranch then return end
         if npcIsAlert( me ) then return end
 
         DYN_NPC_SQUADS.NpcPlaySound( me, "inventedsquadcalm" )
@@ -574,7 +378,15 @@ local function npcWanderForward( me, refent )
     me:SetSchedule( SCHED_IDLE_WALK )
     me:NavSetRandomGoal( 512, refent:GetAimVector() )
 
-    -- debugoverlay.Line( me:GetPos(), me:GetPos() + ( refent:GetAimVector() * 100 ), 2, Color( 255, 255, 255 ) )
+end
+
+local function npcWanderAwayFrom( me, pos )
+    if not canDynSquadsMove( me ) then return end
+    if hook_Run( "dynsquads_blockmovement", me ) == true then return end
+
+    if me:GetPathDistanceToGoal() > 25 then return end
+    me:SetSchedule( SCHED_IDLE_WALK )
+    me:NavSetRandomGoal( 512, dirToPosFlat( pos, me:GetPos() ) )
 
 end
 
@@ -638,7 +450,7 @@ local function npcStandWatch( me, myLeader )
     local myShoot = shootPosOrFallback( me )
     local leadersShoot = shootPosOrFallback( myLeader )
 
-    local awayFromLeader = dirToPos( leadersShoot, myShoot )
+    local awayFromLeader = dirToPosFlat( leadersShoot, myShoot )
     -- flatten
     awayFromLeader.z = 0
     awayFromLeader:Normalize()
@@ -713,8 +525,28 @@ local function teamCheck( npc )
 
 end
 
+local function findOtherLeaderNearby( me, pos )
+    local nearest
+    local nearestDist = math.huge
+    local myTeam = me.dynSquadTeam
+
+    for _, currLeader in ipairs( dynSquadLeaders ) do
+        if not IsValid( currLeader ) then continue end
+        if currLeader == me then continue end
+        if myTeam ~= currLeader.dynSquadTeam then continue end
+        local dist = currLeader:GetPos():DistToSqr( pos )
+        if dist > nearestDist then continue end
+
+        nearest = currLeader
+        nearestDist = dist
+
+    end
+    return nearest, nearestDist
+
+end
+
 local closeEnoughToWipe = 300^2
-local maxDuplicates = 2
+local maxDuplicates = 8
 
 local function addPoint( points, theTeam, time, pos )
     time = math.Round( time )
@@ -793,14 +625,27 @@ end
 
 local vecFor2dChecks = Vector()
 local vecFor2dChecks2 = Vector()
+local aboveAssaultOffset = Vector( 0, 0, 40 )
+local earlyClearIfVisible = 2500
+
+local function shouldEarlyClearAssaultpoint( me, myPos, theAssault )
+    vecFor2dChecks:SetUnpacked( theAssault.x, theAssault.y, 0 )
+    vecFor2dChecks2:SetUnpacked( myPos.x, myPos.y, 0 )
+    local distToPoint = vecFor2dChecks:DistToSqr( vecFor2dChecks2 )
+    local reallyClose = sqrDistLessThan( distToPoint, 300 )
+    local closeAndSee = sqrDistLessThan( distToPoint, earlyClearIfVisible ) and me:VisibleVec( theAssault + aboveAssaultOffset )
+    local clearThePos = reallyClose or closeAndSee or me:IsCurrentSchedule( SCHED_FAIL )
+
+    return clearThePos
+
+end
 
 local function shouldClearAssaultpoint( me, myPos, theAssault )
     vecFor2dChecks:SetUnpacked( theAssault.x, theAssault.y, 0 )
     vecFor2dChecks2:SetUnpacked( myPos.x, myPos.y, 0 )
     local distToPoint = vecFor2dChecks:DistToSqr( vecFor2dChecks2 )
     local reallyClose = sqrDistLessThan( distToPoint, 300 )
-    local closeAndSee = sqrDistLessThan( distToPoint, 1500 ) and me:VisibleVec( theAssault + Vector( 0,0,40 ) )
-    local clearThePos = reallyClose or closeAndSee or me:IsCurrentSchedule( SCHED_FAIL )
+    local clearThePos = reallyClose or me:IsCurrentSchedule( SCHED_FAIL )
 
     return clearThePos
 
@@ -822,6 +667,8 @@ local function npcFillPointCache( npc, pointType )
 
     local npcsPos = npc:GetPos()
     local bestTime = 0
+    local reallyCloseDistSqr = earlyClearIfVisible^2
+    local neverReallyClose = true
     local point
     -- go thru, newest to oldest
     for placedTime, pos in SortedPairs( currentTable, true ) do
@@ -830,12 +677,12 @@ local function npcFillPointCache( npc, pointType )
         if age > 240 and point then
             currentTable[placedTime] = nil
             if developerBool then
-                debugoverlay.Text( npcsPos, "staleassaultpurge", 5, true )
-                debugoverlay.Line( npcsPos, pos, 2 )
+                debugoverlay.Text( npcsPos, "staleassaultpurge", 10, true )
+                debugoverlay.Line( npcsPos, pos, 10 )
 
             end
         -- too close to me
-        elseif shouldClearAssaultpoint( npc, npcsPos, pos ) then
+        elseif shouldEarlyClearAssaultpoint( npc, npcsPos, pos ) then
             if developerBool then
                 debugoverlay.Text( npcsPos, "earlyassaultclear", 5, true )
                 debugoverlay.Line( npcsPos, pos, 5 )
@@ -843,23 +690,28 @@ local function npcFillPointCache( npc, pointType )
             end
             currentTable[placedTime] = nil
 
-        elseif placedTime > bestTime then
-            bestTime = placedTime
-            point = pos
+        else
+            -- pick either newest, or closest if one is right next to us
+            local currDistSqr = pos:DistToSqr( npcsPos )
+            local reallyClose = currDistSqr < reallyCloseDistSqr
+            if reallyClose then
+                reallyCloseDistSqr = currDistSqr
+                neverReallyClose = nil
 
+            end
+            -- update best
+            if placedTime > bestTime and ( neverReallyClose or reallyClose ) then
+                bestTime = placedTime
+                point = pos
+
+            end
         end
-    end
-
-    if pointType == "flank" then
-        DYN_NPC_SQUADS.teamFlankPoints[dynTeam] = currentTable
-
-    elseif pointType == "reinforce" then
-        DYN_NPC_SQUADS.teamReinforcePoints[dynTeam] = currentTable
-
     end
 
     if not point then return false end
     if point and not isvector( point ) then return false end
+
+    currentTable[bestTime] = nil
 
     npc.cachedPoint = point
     return true, point
@@ -933,24 +785,26 @@ end
 -- main function that loops on every npc with a valid squad, everything above is for this
 -- return nil to treat it as a halting error, and teardown the timer for this npc.
 -- return true to keep the timer running
+-- second var is for debugging
 function DYN_NPC_SQUADS.npcDoSquadThink( me )
-    if not IsValid( me ) then return end
-    if not enabledBool then return true end
+    if not IsValid( me ) then return nil, "invalid npc" end
+    if not enabledBool then return true, "not enabled" end
 
     -- some developer wants us to wait, we wait!
-    if me.DynamicNpcSquadsIgnore then return true end
-    if hook_Run( "dynsquads_blocksquadthinking", me ) == true then return true end
+    if me.DynamicNpcSquadsIgnore then return true, "ignore" end
+    if hook_Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
     local squad = npcSquad( me )
     -- stop here if npc doesnt have "squadname" keyvalue
-    if not squad then return end
+    if not squad then return nil, "cant squad, lua" end
 
     -- stop this if some other system set the squad of the npc
-    if not dynSquadValid( me, squad ) then return end
+    -- also detects when they die?
+    if not dynSquadValid( me, squad ) then return nil, "squad was overriden" end
 
     local caps = me:CapabilitiesGet()
     local canSquad = bit.band( caps, CAP_SQUAD ) >= 1
-    if not canSquad then return end
+    if not canSquad then return nil, "cant squad, caps" end
 
     local myState = me:GetNPCState()
     local ableToAct = enabledAi() and canDynSquadsMove( me )
@@ -1015,9 +869,9 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
             end
         end
-    -- can i plz be lead
+    -- can i plz be lead by someone
     elseif soloSquad then
-        dynSquadFindAcceptingLeader( me )
+        dynSquadAutoTransfer( me, squad )
 
     elseif amLeader then
         if smallAndOld then
@@ -1028,7 +882,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
             if idle then
                 local point = me.cachedPoint
                 if doassaultingBool and point then
-                    if shouldClearAssaultpoint( me, myPos, point ) then
+                    if shouldClearAssaultpoint( me, myPos, point ) or me.squadMemberClearedAssault then
+                        me.squadMemberClearedAssault = nil
                         me.cachedPoint = nil
                         me.assaultAttempts = nil
                         me.wasTraversingToAssault = nil
@@ -1086,10 +941,17 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         me.nextCacheAttempt = CurTime() + math.random( 1, 3 )
 
                     end
-                end
-                if dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
+                elseif dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
                     me.isWandering = true
-                    npcWanderForward( me, me )
+                    -- break up death blobs of squads please
+                    local nearbyLeader, theirDist = findOtherLeaderNearby( me, myPos )
+                    if nearbyLeader and sqrDistLessThan( theirDist, 800 * distMul ) then
+                        npcWanderAwayFrom( me, nearbyLeader:GetPos() )
+
+                    else
+                        npcWanderForward( me, me )
+
+                    end
 
                     if me.dynLastAlertTime and ( me.playedBeginWanderSound or 0 ) ~= me.dynLastAlertTime then
                         DYN_NPC_SQUADS.NpcPlaySound( me, "beganwandering" )
@@ -1130,7 +992,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                 whereLeaderWantsUs = leadersRealPos
 
             end
-            local leaderDirToMe = dirToPos( whereLeaderWantsUs, myPos )
+            local leaderDirToMe = dirToPosFlat( whereLeaderWantsUs, myPos )
             whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * 100 )
 
             local compareToLeaderWants
@@ -1179,6 +1041,11 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                     me.nextPointNotify = CurTime() + 12
                     me.notifedPoint = leadersPoint
                     DYN_NPC_SQUADS.NpcPlaySound( me, "movingtoassault" )
+
+                end
+
+                if not myLeader.squadMemberClearedAssault and shouldClearAssaultpoint( me, myPos, leadersPoint ) then
+                    myLeader.squadMemberClearedAssault = true
 
                 end
 
@@ -1234,7 +1101,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
         tellToMove( me, blocker )
 
     end
-    return true
+    return true, "all good"
 
 end
 
@@ -1261,9 +1128,12 @@ local function dynSquadThinkProcessNpc( npc )
 end
 
 -- on tick incrimental function that slowly chips away at big tasks
+-- this predates my knowledge of coroutines....
 local function dynSquadThink()
     if not enabledBool then return end
 
+    -- do a new build every 3 seconds
+    -- waits until current build is done, if current build goes over time
     if newBuildReady and newBuildTime < CurTime() then
         newBuildReady = false
         newBuildTime = CurTime() + dynSquadMinAssembleTime
@@ -1276,6 +1146,7 @@ local function dynSquadThink()
         buildIndex = 0
 
     elseif doingBuild then
+        -- chip away at the task one npc at a time
         local max = #cachedNpcs
         if buildIndex <= max then
             dynSquadThinkProcessNpc( cachedNpcs[ buildIndex ] )
@@ -1291,6 +1162,11 @@ local function dynSquadThink()
 
             transferCounts = {}
 
+            -- think slow when no npcs
+            if #DYN_NPC_SQUADS.allNpcs <= 0 then
+                newBuildTime = CurTime() + dynSquadMinAssembleTime * 15
+
+            end
         end
     end
 end
@@ -1323,10 +1199,16 @@ local function timerSetup( me )
     -- then repeat
     timer.Create( identifier, 1.25, math.huge, function()
         if not IsValid( me ) then timer.Remove( identifier ) return end
-        local good = DYN_NPC_SQUADS.npcDoSquadThink( me )
+        local good, _ = DYN_NPC_SQUADS.npcDoSquadThink( me )
         if not good then timer.Remove( identifier ) return end
 
     end )
+end
+
+local function canSquad( npc )
+    if not npcSquad( npc ) then return false end
+    return true
+
 end
 
 -- introduces npcs to the system
@@ -1335,10 +1217,7 @@ local function dynSquadAcquire( entity )
     if not IsValid( entity ) then return end
 
     timer.Simple( 0.1, function()
-        if not IsValid( entity ) then return end
-
-        local squad = npcSquad( entity )
-        if not isstring( squad ) then return end
+        if not canSquad( entity ) then return end
 
         if blacklistedClasses[entity:GetClass()] then return end
 
