@@ -1,7 +1,6 @@
 local IsValid = IsValid
 local CurTime = CurTime
 local math = math
-local hook_Run = hook.Run
 
 -- dont use the global vector_origin, some addon is bound to have messed it up 
 local vec_zero = Vector( 0, 0, 0 )
@@ -243,7 +242,7 @@ local function tellToMove( teller, telee )
     if not IsValid( teller ) or not IsValid( telee ) then return end
     if not teller:IsNPC() or not telee:IsNPC() then return end
     if not DYN_NPC_SQUADS.NpcsAreChummy( teller, telee ) then return end
-    if hook_Run( "dynsquads_blockmovement", telee ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", telee ) == true then return end
     telee:SetSaveValue( "vLastKnownLocation", teller:GetPos() )
     telee:SetSchedule( SCHED_TAKE_COVER_FROM_ORIGIN )
 
@@ -372,7 +371,7 @@ end
 
 local function npcWanderForward( me, refent )
     if not canDynSquadsMove( me ) then return end
-    if hook_Run( "dynsquads_blockmovement", me ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
 
     if me:GetPathDistanceToGoal() > 25 then return end
     me:SetSchedule( SCHED_IDLE_WALK )
@@ -382,7 +381,7 @@ end
 
 local function npcWanderAwayFrom( me, pos )
     if not canDynSquadsMove( me ) then return end
-    if hook_Run( "dynsquads_blockmovement", me ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
 
     if me:GetPathDistanceToGoal() > 25 then return end
     me:SetSchedule( SCHED_IDLE_WALK )
@@ -394,7 +393,7 @@ local goRun = SCHED_FORCED_GO_RUN
 
 local function npcCancelGo( npc )
     if not npc.wasDoingConfirmedDynsquadsGo then return end -- long name so no conflicts
-    if hook_Run( "dynsquads_blockmovement", npc ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", npc ) == true then return end
     npc.wasDoingConfirmedDynsquadsGo = nil
 
     local isSched = npc:IsCurrentSchedule( goRun )
@@ -414,7 +413,7 @@ end )
 
 local function npcPathRunToPos( me, pos )
     if not canDynSquadsMove( me ) then return end
-    if hook_Run( "dynsquads_blockmovement", me ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
 
     local setTheSched
     local fail = SCHED_FAIL
@@ -442,7 +441,7 @@ local function npcPathRunToPos( me, pos )
 end
 
 local function npcStandWatch( me, myLeader )
-    if hook_Run( "dynsquads_blockmovement", me ) == true then return end
+    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
     local sched = SCHED_ALERT_STAND
     if me:IsCurrentSchedule( sched ) then return end
     me:SetSchedule( sched )
@@ -792,7 +791,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- some developer wants us to wait, we wait!
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
-    if hook_Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
+    if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
     local squad = npcSquad( me )
     -- stop here if npc doesnt have "squadname" keyvalue
