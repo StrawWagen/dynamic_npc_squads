@@ -1032,7 +1032,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
             end
             local leaderDirToMe = dirToPosFlat( whereLeaderWantsUs, myPos )
-            whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * math.random( 100, 200 ) )
+            whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * math.random( 100, 200 ) * distMul )
 
             local compareToLeaderWants
             local whereIllEndUp = me:GetGoalPos()
@@ -1073,7 +1073,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
                 -- meet up with the leader at the assault pos
                 if sqrDistGreaterThan( myPos:DistToSqr( leadersPoint ), 400 * distMul ) then
-                    local goal = leadersPoint + ( leaderDirToMe * math.random( 100, 200 ) )
+                    local goal = leadersPoint + ( leaderDirToMe * math.random( 100, 200 ) * distMul )
                     npcPathRunToPos( me, goal )
 
                 -- we got there before the leader
