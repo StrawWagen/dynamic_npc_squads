@@ -99,7 +99,7 @@ function ENT:Think()
         if ownedTeam and ownedTeam == teamId then return false end
         return true
 
-    end )
+    end, 0 )
     self:NextThink( CurTime() + 1 )
     return true
 
