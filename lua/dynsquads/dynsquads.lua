@@ -369,12 +369,13 @@ local function canDynSquadsMove( me, state )
 
 end
 
-local function npcWanderForward( me, refent )
+local function npcWanderForward( me, refent, dist )
     if me:GetPathDistanceToGoal() > 25 then return end
     if not canDynSquadsMove( me ) then return end
 
+    dist = dist or 512
     me:SetSchedule( SCHED_IDLE_WALK )
-    me:NavSetRandomGoal( 512, refent:GetAimVector() )
+    me:NavSetRandomGoal( dist, refent:GetAimVector() )
 
 end
 
@@ -984,7 +985,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         npcWanderAwayFrom( me, nearbyLeader:GetPos() )
 
                     else
-                        npcWanderForward( me, me )
+                        -- wander with a bigger dist, forcing leader to actually leave enclosed spaces
+                        npcWanderForward( me, me, 2048 )
 
                     end
 
@@ -1081,7 +1083,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
             elseif idle then
                 -- far from leader, unintentionally
                 -- so we make the npc stand watch instead, to make it look smart
-                if sqrDistGreaterThan( sqrDistToLeader, 600 * distMul ) then
+                if sqrDistGreaterThan( sqrDistToLeader, 700 * distMul ) then
                     -- only armed/range attacking npcs stand watch
                     if not me.wasStandingWatch and hasWep then
                         me.wasStandingWatch = true
