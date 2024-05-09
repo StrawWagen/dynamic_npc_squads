@@ -6,8 +6,6 @@ local math = math
 -- dont use the global vector_origin, some addon is bound to have messed it up 
 local vec_zero = Vector( 0, 0, 0 )
 
-DYN_NPC_SQUADS = DYN_NPC_SQUADS or {}
-
 local developer = CreateConVar( "npc_dynsquads_developer", 0, FCVAR_ARCHIVE, "Enable/disable 'developer 1' info?" )
 local doenable = CreateConVar( "npc_dynsquads_enabled", 1, FCVAR_ARCHIVE, "Enable/disable the entire 'dynamic npc squads' addon,", 0, 1 )
 local dowandering = CreateConVar( "npc_dynsquads_dowandering", 1, FCVAR_ARCHIVE, "Should dynsquads wander around the map?" )
@@ -841,8 +839,9 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local isArmed = hasWep or bit.band( caps, CAP_INNATE_RANGE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_RANGE_ATTACK2 ) >= 1 or bit.band( caps, CAP_INNATE_MELEE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_MELEE_ATTACK2 ) >= 1
 
     local distMul = 1
+    local imAFlier = bit.band( caps, CAP_MOVE_FLY )
     -- flying npcs can go far from their leaders
-    if bit.band( caps, CAP_MOVE_FLY ) >= 1 then
+    if imAFlier >= 1 then
         distMul = 4
 
     end
@@ -916,7 +915,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                 me:SetNPCState( NPC_STATE_IDLE )
                 DYN_NPC_SQUADS.NpcPlaySound( me, "beganwandering" )
 
-            elseif not alert then
+            end
+            if not fighting then
                 local point = me.cachedPoint
                 if doassaultingBool and point then
                     if shouldClearAssaultpoint( me, myPos, point ) or me.squadMemberClearedAssault then
@@ -978,10 +978,11 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         me.nextCacheAttempt = CurTime() + math.random( 1, 3 )
 
                     end
-                elseif dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
+
+                elseif not alert and dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
                     -- break up death blobs of squads please
                     local nearbyLeader, theirDist = findOtherLeaderNearby( me, myPos )
-                    if nearbyLeader and sqrDistLessThan( theirDist, 800 * distMul ) then
+                    if nearbyLeader and sqrDistLessThan( theirDist, 1200 * distMul ) then
                         npcWanderAwayFrom( me, nearbyLeader:GetPos() )
 
                     else
@@ -1007,6 +1008,15 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
         end
         if ableToAct then
+            -- if im a grounder lead by a flier, dont try to get as close to my leader
+            if not imAFlier then
+                local leadersCaps = myLeader:CapabilitiesGet()
+                if bit.band( leadersCaps, CAP_MOVE_FLY ) >= 1 then
+                    distMul = 2
+
+                end
+            end
+
             local leadersPoint = myLeader.cachedPoint
             local leadersRealPos = myLeader:GetPos()
             local whereLeaderWantsUs
@@ -1022,7 +1032,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
             end
             local leaderDirToMe = dirToPosFlat( whereLeaderWantsUs, myPos )
-            whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * 100 )
+            whereLeaderWantsUs = whereLeaderWantsUs + ( leaderDirToMe * math.random( 100, 200 ) )
 
             local compareToLeaderWants
             local whereIllEndUp = me:GetGoalPos()
@@ -1063,7 +1073,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
                 -- meet up with the leader at the assault pos
                 if sqrDistGreaterThan( myPos:DistToSqr( leadersPoint ), 400 * distMul ) then
-                    local goal = leadersPoint + ( leaderDirToMe * math.random( 50, 150 ) )
+                    local goal = leadersPoint + ( leaderDirToMe * math.random( 100, 200 ) )
                     npcPathRunToPos( me, goal )
 
                 -- we got there before the leader
@@ -1099,7 +1109,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                             DYN_NPC_SQUADS.NpcPlaySound( me, "ambientwander" )
 
                         end
-                    elseif idle and canReturnToLeader then
+                    elseif idle and canReturnToLeader and sqrDistGreaterThan( distToWhereLeaderWants, 400 * distMul ) then
                         npcPathRunToPos( me, whereLeaderWantsUs )
 
                     end
