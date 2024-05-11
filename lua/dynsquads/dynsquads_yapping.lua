@@ -4,8 +4,6 @@ local function enabledAi()
 
 end
 
-DYN_NPC_SQUADS = DYN_NPC_SQUADS or {}
-
 local doyapping = CreateConVar( "npc_dynsquads_yapping", 1, FCVAR_ARCHIVE, "Should dynsquads make npcs yap?" )
 local developer = GetConVar( "npc_dynsquads_developer" )
 
