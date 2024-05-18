@@ -418,7 +418,10 @@ hook.Add( "EntityTakeDamage", "dynsquads_breaktrances", function( damaged )
     local squad = npcSquad( damaged )
     if not squad then return end
 
-    for _, squadmate in ipairs( ai.GetSquadMembers( squad ) ) do
+    local squadMembers = ai.GetSquadMembers( squad )
+    if not squadMembers then return end
+
+    for _, squadmate in ipairs( squadMembers ) do
         if squadmate.wasDoingConfirmedDynsquadsGo then
             if not squadmate:IsCurrentSchedule( goRunSched ) then
                 squadmate.wasDoingConfirmedDynsquadsGo = nil
@@ -765,6 +768,8 @@ local function npcCanSavePoint( me )
 
     local currHealth = 0
     local members = ai.GetSquadMembers( squad )
+    if not members then return end
+
     for _, member in ipairs( members ) do
         if member.Health then
             currHealth = currHealth + member:Health()
@@ -780,7 +785,8 @@ local function npcCanSavePoint( me )
     local oldCount = me.oldSquadMemberCount or 0
     me.oldSquadMemberCount = currCount
     local losingMembers = currCount < oldCount
-    if losingMembers then return true end
+    local oneMember = currCount <= 1
+    if losingMembers or oneMember then return true end
 
     return false
 
