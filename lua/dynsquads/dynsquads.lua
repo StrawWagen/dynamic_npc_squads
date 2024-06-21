@@ -56,20 +56,17 @@ local interruptConditions = {
 }
 
 
-local dynSquadLeaders = dynSquadLeaders or {}
+DYN_NPC_SQUADS.dynSquadLeaders = DYN_NPC_SQUADS.dynSquadLeaders or {}
 DYN_NPC_SQUADS.allNpcs = DYN_NPC_SQUADS.allNpcs or {}
 
 local cachedNpcs = cachedNpcs or {}
 local transferCounts = transferCounts or {}
 
+DYN_NPC_SQUADS.dynSquadTeams = DYN_NPC_SQUADS.dynSquadTeams or {}
 DYN_NPC_SQUADS.dynSquadCounts = DYN_NPC_SQUADS.dynSquadCounts or {}
 DYN_NPC_SQUADS.teamFlankPoints = DYN_NPC_SQUADS.teamFlankPoints or {}
 DYN_NPC_SQUADS.teamReinforcePoints = DYN_NPC_SQUADS.teamReinforcePoints or {}
 DYN_NPC_SQUADS.dynSquadTeamIndex = DYN_NPC_SQUADS.dynSquadTeamIndex or 0
-
-local dynSquadCounts2 = {}
-local dynSquadLeaders2 = {}
-local allNpcs2 = {}
 
 local timerInterval = 1.25
 local minAssembleTime = 3
@@ -232,6 +229,24 @@ function DYN_NPC_SQUADS.NpcsAreChummy( chummer, chummee )
 
 end
 
+function invalidSquadCheck( me, squad )
+    local nextCheck = me.nextInvalidSquadCheck
+    if not nextCheck then
+        me.nextInvalidSquadCheck = CurTime() + 10
+        return
+
+    end
+    if nextCheck > CurTime() then return end
+    me.nextInvalidSquadCheck = CurTime() + 10
+
+    local members = ai.GetSquadMembers( squad )
+    if not members then return end
+    for _, member in ipairs( members ) do
+        if member ~= me and not DYN_NPC_SQUADS.NpcsAreChummy( me, member ) then return true end
+
+    end
+end
+
 -- get oot me way mate!
 local function tellToMove( teller, telee )
     if not IsValid( teller ) or not IsValid( telee ) then return end
@@ -245,7 +260,7 @@ end
 
 -- heavy function that finds a leader
 local function dynSquadFindAcceptingLeader( me )
-    local sortedLeaders = sortEntsByDistanceTo( dynSquadLeaders, me:GetPos() )
+    local sortedLeaders = sortEntsByDistanceTo( DYN_NPC_SQUADS.dynSquadLeaders, me:GetPos() )
     local success = false
 
     for _, currentLeader in ipairs( sortedLeaders ) do
@@ -307,7 +322,7 @@ local function dynSquadNpcBranchOff( me )
     end
 
     npcSetDynSquad( me, newName ) -- invent new squads
-    table.insert( dynSquadLeaders, me )
+    table.insert( DYN_NPC_SQUADS.dynSquadLeaders, me )
     me.LeaderPromotionTime = CurTime()
 
     return true
@@ -551,7 +566,7 @@ local function findOtherLeaderNearby( me, pos )
     local nearestDist = math.huge
     local myTeam = me.dynSquadTeam
 
-    for _, currLeader in ipairs( dynSquadLeaders ) do
+    for _, currLeader in ipairs( DYN_NPC_SQUADS.dynSquadLeaders ) do
         if
             IsValid( currLeader )
             and currLeader == me
@@ -697,7 +712,7 @@ local function npcFillPointCache( npc, pointType )
     for placedTime, pos in SortedPairs( currentTable, true ) do
         local age = CurTime() - placedTime
         -- we found a good point already, and this one's really old, just delete it
-        if age > 240 and point then
+        if age > 480 and point then
             currentTable[placedTime] = nil
             if developerBool then
                 debugoverlay.Text( npcsPos, "staleassaultpurge", 10, true )
@@ -747,7 +762,10 @@ local function saveEnemyContact( me, enemy )
     if not me:Visible( enemy ) then return end
 
     local enemyPos = enemy:GetPos()
-    saveFlankPoint( me, enemyPos, 0 )
+    if me.IsOnGround and me:IsOnGround() then
+        saveFlankPoint( me, enemyPos, 0 )
+
+    end
 
     if me:GetPos():DistToSqr( enemyPos ) < 3000^2 then
         saveReinforcePoint( me, me:GetPos(), 0 )
@@ -757,18 +775,30 @@ local function saveEnemyContact( me, enemy )
 
 end
 
+local pointSaveInterval = 2.5
+
+local function npcCanSavePointSimple( me )
+    if not doassaultingBool then return false end
+
+    local lastSaved = me.lastAssaultPosSaveTime or 0
+    if ( lastSaved + pointSaveInterval ) > CurTime() then return false end
+
+    return true
+
+end
+
 local function npcCanSavePoint( me )
     if not doassaultingBool then return false end
 
     local lastSaved = me.lastAssaultPosSaveTime or 0
-    if ( lastSaved + 2.5 ) > CurTime() then return false end
+    if ( lastSaved + pointSaveInterval ) > CurTime() then return false end
 
     local squad = npcSquad( me )
     if not squad then return false end
 
     local currHealth = 0
     local members = ai.GetSquadMembers( squad )
-    if not members then return end
+    if not members then return false end
 
     for _, member in ipairs( members ) do
         if member.Health then
@@ -819,9 +849,30 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
     if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
+    -- used by npcs with no movement capabilites or that crash the game when their squad is set.
+    if me.dynsquads_OnlyCallForBackup then
+        if not me.dynSquadTeam then print( me ) return nil, "ignore, only calling backup, but not in a team to call for backup within." end
+        local myEnemy = me:GetEnemy()
+        if IsValid( myEnemy ) and npcCanSavePointSimple( me ) then
+            saveEnemyContact( me, myEnemy )
+
+        end
+
+        return true
+
+    end
+
     -- stop this if some other system set the squad of the npc
     -- also detects when they die?
     if not dynSquadValid( me, squad ) then return nil, "squad was overriden" end
+
+    -- dissolve squads if members hate eachother
+    if invalidSquadCheck( me, squad ) then
+        npcSetDynSquad( me, "" )
+        me.dynSquadInBacklog = true
+        return true, "squad with enemies"
+
+    end
 
     local caps = me:CapabilitiesGet()
     local myState = me:GetNPCState()
@@ -967,6 +1018,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                         me.wasTraversingToAssault = true
 
                     end
+                -- look for assaults
                 elseif doassaultingBool and not point and ( me.nextCacheAttempt or 0 ) < CurTime() then
                     local choices = { [0] = "flank", [1] = "reinforce" }
                     local choice = choices[ math.random( 0, 1 ) ]
@@ -985,6 +1037,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
                     end
 
+                -- no assaults, leader wander!
                 elseif not alert and dowanderingBool and not point and ( me.dynLastAlertTime or 0 ) < CurTime() then
                     -- break up death blobs of squads please
                     local nearbyLeader, theirDist = findOtherLeaderNearby( me, myPos )
@@ -1142,9 +1195,21 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 end
 
 
+local dynSquadTeams2 = {}
+local dynSquadCounts2 = {}
+local dynSquadLeaders2 = {}
+local allNpcs2 = {}
+
 -- store a npc in the correct tables
 local function dynSquadThinkProcessNpc( npc )
     if not IsValid( npc ) then return end
+
+    local currsTeam = npc.dynSquadTeam
+    if not dynSquadTeams2[currsTeam] then
+        dynSquadTeams2[currsTeam] = {}
+
+    end
+    table.insert( dynSquadTeams2[currsTeam], npc )
 
     local squad = npcSquad( npc )
     if not squad then return end
@@ -1174,6 +1239,7 @@ local function dynSquadThink()
         newBuildTime = CurTime() + minAssembleTime
         doingBuild = true
 
+        dynSquadTeams2 = {}
         dynSquadCounts2 = {}
         dynSquadLeaders2 = {}
         allNpcs2 = {}
@@ -1187,11 +1253,13 @@ local function dynSquadThink()
             dynSquadThinkProcessNpc( cachedNpcs[ buildIndex ] )
             buildIndex = buildIndex + 1
 
+        -- all done
         elseif buildIndex > max then
             doingBuild = false
             newBuildReady = true
 
-            dynSquadLeaders = dynSquadLeaders2
+            DYN_NPC_SQUADS.dynSquadTeams = dynSquadTeams2
+            DYN_NPC_SQUADS.dynSquadLeaders = dynSquadLeaders2
             DYN_NPC_SQUADS.dynSquadCounts = dynSquadCounts2
             DYN_NPC_SQUADS.allNpcs = allNpcs2
 
@@ -1214,13 +1282,16 @@ local function dynSquadInitializeNpc( me )
     table.insert( DYN_NPC_SQUADS.allNpcs, me )
     teamCheck( me )
 
-    -- pasted in!
-    if me.dynamicSquad then
-        me:SetSquad( me.dynamicSquad )
+    if not me.dynsquads_OnlyCallForBackup then
+        -- pasted in!
+        if me.dynamicSquad then
+            me:SetSquad( me.dynamicSquad )
 
-    else
-        me:SetSquad( "" )
-        me.dynSquadInBacklog = true
+        else
+            me:SetSquad( "" )
+            me.dynSquadInBacklog = true
+
+        end
 
     end
 
@@ -1238,10 +1309,13 @@ local function dynSquadInitializeNpc( me )
     end )
 end
 
-local blacklistedClasses = { -- crash fix
+local backupOnlyClasses = { -- crash fix
     ["npc_manhack"] = true,
     ["npc_sniper"] = true,
-    ["npc_rollermine"] = true
+    ["npc_bullseye"] = true,
+    ["npc_rollermine"] = true,
+    ["npc_turret_floor"] = true,
+    ["bullseye_strider_focus"] = true,
 
 }
 
@@ -1254,7 +1328,7 @@ hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity 
     local rand = math.random( 0, timerInterval )
     timer.Simple( 0.5 + rand, function()
         if not npcSquad( entity ) then return end
-        if blacklistedClasses[entity:GetClass()] then return end
+        if backupOnlyClasses[entity:GetClass()] or not IsValid( entity:GetPhysicsObject() ) then entity.dynsquads_OnlyCallForBackup = true end
 
         dynSquadInitializeNpc( entity )
 
