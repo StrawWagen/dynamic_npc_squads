@@ -1319,6 +1319,14 @@ local backupOnlyClasses = { -- crash fix
 
 }
 
+-- no physobj but they work fine...
+local exceptions = {
+    ["npc_strider"] = true,
+    ["npc_helicopter"] = true,
+    ["npc_combinegunship"] = true,
+
+}
+
 -- introduces npcs to the system
 hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity )
     if not IsValid( entity ) then return end
@@ -1328,7 +1336,8 @@ hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity 
     local rand = math.random( 0, timerInterval )
     timer.Simple( 0.5 + rand, function()
         if not npcSquad( entity ) then return end
-        if backupOnlyClasses[entity:GetClass()] or not IsValid( entity:GetPhysicsObject() ) then entity.dynsquads_OnlyCallForBackup = true end
+        local class = entity:GetClass()
+        if backupOnlyClasses[class] or ( not exceptions[class] and not IsValid( entity:GetPhysicsObject() ) ) then entity.dynsquads_OnlyCallForBackup = true end
 
         dynSquadInitializeNpc( entity )
 
