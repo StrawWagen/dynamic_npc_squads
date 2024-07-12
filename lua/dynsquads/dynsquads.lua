@@ -161,8 +161,8 @@ end
 local function npcSetDynSquad( npc, squad )
     if not IsValid( npc ) then return end
 
-    local oldSquad = npc:GetSquad() or ""
-    if oldSquad ~= "" then
+    local oldSquad = npc.dynamicSquad
+    if oldSquad and oldSquad ~= "" then
         local oldCount = DYN_NPC_SQUADS.dynSquadCounts[ oldSquad ] or 0
         DYN_NPC_SQUADS.dynSquadCounts[ oldSquad ] = math.Clamp( oldCount + -1, 0, math.huge )
 
@@ -1205,6 +1205,15 @@ local function dynSquadThinkProcessNpc( npc )
     if not IsValid( npc ) then return end
 
     local currsTeam = npc.dynSquadTeam
+    if not currsTeam then
+        teamCheck( npc )
+        currsTeam = npc.dynSquadTeam
+
+    end
+
+    -- ???
+    if not currsTeam then return end
+
     if not dynSquadTeams2[currsTeam] then
         dynSquadTeams2[currsTeam] = {}
 
@@ -1309,13 +1318,14 @@ local function dynSquadInitializeNpc( me )
     end )
 end
 
-local backupOnlyClasses = { -- crash fix
-    ["npc_manhack"] = true,
-    ["npc_sniper"] = true,
+local backupOnlyClasses = {
+    ["npc_sniper"] = true, -- crash fix
+    ["npc_manhack"] = true, -- crash fix
+    ["npc_rollermine"] = true, -- crash fix
+    ["npc_turret_floor"] = true, -- crash fix
+    ["bullseye_strider_focus"] = true, -- crash fix
     ["npc_bullseye"] = true,
-    ["npc_rollermine"] = true,
-    ["npc_turret_floor"] = true,
-    ["bullseye_strider_focus"] = true,
+    ["npc_barnacle"] = true,
 
 }
 
