@@ -247,12 +247,25 @@ function invalidSquadCheck( me, squad )
     end
 end
 
+local function canDynSquadsMove( me, state )
+    state = state or me:GetNPCState()
+    if state == NPC_STATE_SCRIPT then return end
+    -- asleep check
+    if me:IsCurrentSchedule( -1 ) then return end
+    if me.dynSquads_DontMove and me.dynSquads_DontMove > CurTime() then return end
+    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
+
+    return true
+
+end
+
 -- get oot me way mate!
 local function tellToMove( teller, telee )
     if not IsValid( teller ) or not IsValid( telee ) then return end
     if not teller:IsNPC() or not telee:IsNPC() then return end
     if not DYN_NPC_SQUADS.NpcsAreChummy( teller, telee ) then return end
-    if hook.Run( "dynsquads_blockmovement", telee ) == true then return end
+    if not canDynSquadsMove( telee ) then return end
+
     telee:SetSaveValue( "vLastKnownLocation", teller:GetPos() )
     telee:SetSchedule( SCHED_TAKE_COVER_FROM_ORIGIN )
 
@@ -370,25 +383,24 @@ local function dynSquadValid( me, squad )
 end
 
 
-local function canDynSquadsMove( me, state )
-    state = state or me:GetNPCState()
-    if state == NPC_STATE_SCRIPT then return end
-    -- asleep check
-    if me:IsCurrentSchedule( -1 ) then return end
-    if me.dynSquads_DontMove and me.dynSquads_DontMove > CurTime() then return end
-    if hook.Run( "dynsquads_blockmovement", me ) == true then return end
-
-    return true
-
-end
+local defDist = 512
 
 local function npcWanderForward( me, refent, dist )
     if me:GetPathDistanceToGoal() > 25 then return end
     if not canDynSquadsMove( me ) then return end
 
-    dist = dist or 512
+    if not IsValid( refent ) then return end
+    if not refent.GetAimVector then return end
+
+    dist = dist or defDist
     me:SetSchedule( SCHED_IDLE_WALK )
-    me:NavSetRandomGoal( dist, refent:GetAimVector() )
+
+    local myPos = me:GetPos()
+    local aimVector = refent:GetAimVector()
+    aimVector.z = 0
+    aimVector:Normalize()
+
+    me:NavSetGoal( myPos, dist, aimVector )
 
 end
 
@@ -397,7 +409,9 @@ local function npcWanderAwayFrom( me, pos )
     if not canDynSquadsMove( me ) then return end
 
     me:SetSchedule( SCHED_IDLE_WALK )
-    me:NavSetRandomGoal( 512, dirToPosFlat( pos, me:GetPos() ) )
+
+    local myPos = me:GetPos()
+    me:NavSetGoal( myPos, defDist, dirToPosFlat( pos, myPos ) )
 
 end
 
@@ -663,7 +677,7 @@ end
 local vecFor2dChecks = Vector()
 local vecFor2dChecks2 = Vector()
 local aboveAssaultOffset = Vector( 0, 0, 40 )
-local earlyClearIfVisible = 2500
+local earlyClearIfVisible = 1750
 
 local function shouldEarlyClearAssaultpoint( me, myPos, theAssault )
     vecFor2dChecks:SetUnpacked( theAssault.x, theAssault.y, 0 )
@@ -845,6 +859,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     -- stop here if npc doesnt have "squadname" keyvalue or GetSquad function 
     if not squad then return nil, "cant squad, lua" end
 
+    if not me:IsInWorld() then return end
+
     -- just makes the system wait
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
     if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
@@ -893,7 +909,6 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     local canUseWeapon = bit.band( caps, CAP_USE_WEAPONS ) >= 1
     local hasWep = #me:GetWeapons() > 0
-    local isArmed = hasWep or bit.band( caps, CAP_INNATE_RANGE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_RANGE_ATTACK2 ) >= 1 or bit.band( caps, CAP_INNATE_MELEE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_MELEE_ATTACK2 ) >= 1
 
     local distMul = 1
     local imAFlier = bit.band( caps, CAP_MOVE_FLY )
@@ -929,7 +944,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local needsToForceIdle = ( lastAlertTime + fearfulness ) < CurTime() and not fighting and not idle
 
     -- eg, npc_citizen no weapons
-    if canUseWeapon and not isArmed then
+    if canUseWeapon and not hasWep then
         if alert then
             npcAlertThink( me )
 
