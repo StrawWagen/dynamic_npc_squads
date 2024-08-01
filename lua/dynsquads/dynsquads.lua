@@ -252,6 +252,7 @@ local function canDynSquadsMove( me, state )
     if state == NPC_STATE_SCRIPT then return end
     -- asleep check
     if me:IsCurrentSchedule( -1 ) then return end
+    if me:IsCurrentSchedule( SCHED_SCRIPTED_WAIT ) then return end
     if me.dynSquads_DontMove and me.dynSquads_DontMove > CurTime() then return end
     if hook.Run( "dynsquads_blockmovement", me ) == true then return end
 
@@ -386,8 +387,8 @@ end
 local defDist = 512
 
 local function npcWanderForward( me, refent, dist )
-    if me:GetPathDistanceToGoal() > 25 then return end
     if not canDynSquadsMove( me ) then return end
+    if me:GetPathDistanceToGoal() > 25 then return end
 
     if not IsValid( refent ) then return end
     if not refent.GetAimVector then return end
@@ -405,8 +406,8 @@ local function npcWanderForward( me, refent, dist )
 end
 
 local function npcWanderAwayFrom( me, pos )
-    if me:GetPathDistanceToGoal() > 25 then return end
     if not canDynSquadsMove( me ) then return end
+    if me:GetPathDistanceToGoal() > 25 then return end
 
     me:SetSchedule( SCHED_IDLE_WALK )
 
@@ -846,6 +847,8 @@ local function npcAlertThink( npc )
     end
 end
 
+local classes = {}
+
 -- main function that loops on every npc with a valid squad, everything above/below is for this
 -- return nil to treat it as a halting error, and teardown the timer for this npc.
 -- return true to keep the timer running
@@ -892,7 +895,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     local caps = me:CapabilitiesGet()
     local myState = me:GetNPCState()
-    local ableToAct = enabledAi() and canDynSquadsMove( me )
+    local canMove = canDynSquadsMove( me )
+    local ableToAct = enabledAi() and canMove
     local count = DYN_NPC_SQUADS.dynSquadCounts[squad] or 0
     local myLeader = ai.GetSquadLeader( squad )
     local amLeader = me:IsSquadLeader()
@@ -945,6 +949,12 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- eg, npc_citizen no weapons
     if canUseWeapon and not hasWep then
+        local class = me:GetClass()
+        if not classes[ class ] then
+            classes[ class ] = true
+            print( class, "A" )
+
+        end
         if alert then
             npcAlertThink( me )
 
@@ -958,7 +968,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
         end
     elseif amLeader then
         -- can i plz be lead by someone
-        if soloSquad then
+        if soloSquad and canMove then
             dynSquadAutoTransfer( me, squad )
 
         end
@@ -1197,7 +1207,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                 end
             end
         end
-    else
+    elseif canMove then
         dynSquadAutoTransfer( me, squad )
 
     end
@@ -1316,7 +1326,6 @@ local function dynSquadInitializeNpc( me )
             me.dynSquadInBacklog = true
 
         end
-
     end
 
     local identifier = me:GetCreationID() .. "STRAW_dynamic_npc_squads_think"
@@ -1342,13 +1351,13 @@ local backupOnlyClasses = {
     ["npc_bullseye"] = true,
     ["npc_barnacle"] = true,
 
-}
-
--- no physobj but they work fine...
-local exceptions = {
-    ["npc_strider"] = true,
-    ["npc_helicopter"] = true,
-    ["npc_combinegunship"] = true,
+    ["npc_kleiner"] = true,
+    ["npc_eli"] = true,
+    ["npc_breen"] = true,
+    ["npc_fisherman"] = true,
+    ["npc_gman"] = true,
+    ["npc_gman"] = true,
+    ["npc_mossman"] = true,
 
 }
 
@@ -1359,10 +1368,10 @@ hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity 
 
     -- stop all npcs from thinking in sync
     local rand = math.random( 0, timerInterval )
-    timer.Simple( 0.5 + rand, function()
+    timer.Simple( 1.5 + rand, function()
         if not npcSquad( entity ) then return end
         local class = entity:GetClass()
-        if backupOnlyClasses[class] or ( not exceptions[class] and not IsValid( entity:GetPhysicsObject() ) ) then entity.dynsquads_OnlyCallForBackup = true end
+        if backupOnlyClasses[class] or not IsValid( entity:GetPhysicsObject() ) then entity.dynsquads_OnlyCallForBackup = true end
 
         dynSquadInitializeNpc( entity )
 
