@@ -847,7 +847,7 @@ local function npcAlertThink( npc )
     end
 end
 
-local classes = {}
+local classes
 
 -- main function that loops on every npc with a valid squad, everything above/below is for this
 -- return nil to treat it as a halting error, and teardown the timer for this npc.
@@ -912,7 +912,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local smallAndOld = count <= 1 and old
 
     local canUseWeapon = bit.band( caps, CAP_USE_WEAPONS ) >= 1
-    local hasWep = #me:GetWeapons() > 0
+    local hasWep = #me:GetWeapons() > 0 or bit.band( caps, CAP_INNATE_RANGE_ATTACK1 ) >= 1 or bit.band( caps, CAP_INNATE_RANGE_ATTACK2 ) >= 1
 
     local distMul = 1
     local imAFlier = bit.band( caps, CAP_MOVE_FLY )
@@ -949,12 +949,15 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- eg, npc_citizen no weapons
     if canUseWeapon and not hasWep then
+        --[[
+        classes = classes or {}
         local class = me:GetClass()
         if not classes[ class ] then
             classes[ class ] = true
-            print( class, "A" )
+            print( class )
 
         end
+        --]]
         if alert then
             npcAlertThink( me )
 

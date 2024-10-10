@@ -13,6 +13,7 @@ ENT.Category    = "Other"
 ENT.PrintName   = "Dynsquads Goal"
 ENT.Author      = "straw"
 ENT.Purpose     = "attracts all Dynamic Npc Squads"
+ENT.Information = ENT.Purpose
 ENT.Spawnable   = true
 ENT.AdminOnly   = true
 
