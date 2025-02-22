@@ -776,8 +776,6 @@ local function npcFillPointCache( npc, pointType )
                 if currDistSqr > pointsCutoff^2 then continue end
                 if pointsCutoff > nearbyMaxDist then currentTable[placedTime] = nil continue end -- this nearby point is not nearby anything
 
-                debugoverlay.Line( pos, npcsPos, 5, color_white, true )
-
             end
             local reallyClose = currDistSqr < reallyCloseDistSqr
             if reallyClose then
