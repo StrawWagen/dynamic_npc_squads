@@ -158,6 +158,7 @@ local function playSound( npc, soundKey )
     if not enabledAi() then return end
     if not IsValid( npc ) then return end
     if npc:GetMaxHealth() > 0 and npc:Health() <= 0 then return end
+    if npc.dynsquads_NoYap then return end -- use this!
 
     local model = npc:GetModel()
     if not model then return end

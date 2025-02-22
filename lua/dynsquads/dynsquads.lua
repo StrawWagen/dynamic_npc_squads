@@ -66,6 +66,7 @@ DYN_NPC_SQUADS.dynSquadTeams = DYN_NPC_SQUADS.dynSquadTeams or {}
 DYN_NPC_SQUADS.dynSquadCounts = DYN_NPC_SQUADS.dynSquadCounts or {}
 DYN_NPC_SQUADS.teamFlankPoints = DYN_NPC_SQUADS.teamFlankPoints or {}
 DYN_NPC_SQUADS.teamReinforcePoints = DYN_NPC_SQUADS.teamReinforcePoints or {}
+DYN_NPC_SQUADS.teamNearReinforcePoints = DYN_NPC_SQUADS.teamNearReinforcePoints or {}
 DYN_NPC_SQUADS.dynSquadTeamIndex = DYN_NPC_SQUADS.dynSquadTeamIndex or 0
 
 local timerInterval = 1.25
@@ -615,8 +616,8 @@ local function addPoint( points, theTeam, time, pos )
     -- remove duplicates if there's too many
     -- only if there's too many, so that there's enough points for multiple squads to eat up, at all times
     local duplicateCount = 0
-    for currTime, currPos in pairs( currReinforcePoints ) do
-        if currPos:DistToSqr( pos ) < closeEnoughToWipe then
+    for currTime, pointDat in pairs( currReinforcePoints ) do
+        if pointDat.pos:DistToSqr( pos ) < closeEnoughToWipe then
             duplicateCount = duplicateCount + 1
 
             if duplicateCount >= maxDuplicates then
@@ -629,7 +630,10 @@ local function addPoint( points, theTeam, time, pos )
         end
     end
 
-    currReinforcePoints[time] = pos
+    local pointDat = {
+        pos = pos
+    }
+    currReinforcePoints[time] = pointDat
 
 end
 
@@ -652,6 +656,15 @@ local function saveReinforcePoint( npc, pos, priority )
     priority = priority or 0
 
     addPoint( DYN_NPC_SQUADS.teamReinforcePoints, dynTeam, CurTime() - priority, pos )
+
+end
+
+local function saveNearReinforcePoint( npc, pos, priority )
+    local dynTeam = npc.dynSquadTeam
+    if not dynTeam then return end
+    priority = priority or 0
+
+    addPoint( DYN_NPC_SQUADS.teamNearReinforcePoints, dynTeam, CurTime() - priority, pos )
 
 end
 
@@ -679,6 +692,9 @@ local vecFor2dChecks = Vector()
 local vecFor2dChecks2 = Vector()
 local aboveAssaultOffset = Vector( 0, 0, 40 )
 local earlyClearIfVisible = 1750
+local nearbyStartingDist = 1500
+local nearbyStepSize = 50
+local nearbyMaxDist = 6000
 
 local function shouldEarlyClearAssaultpoint( me, myPos, theAssault )
     vecFor2dChecks:SetUnpacked( theAssault.x, theAssault.y, 0 )
@@ -707,12 +723,17 @@ end
 local function npcFillPointCache( npc, pointType )
     local currentTable = nil
     local dynTeam = npc.dynSquadTeam
+    local nearbyOnly
 
     if pointType == "flank" then
         currentTable = DYN_NPC_SQUADS.teamFlankPoints[dynTeam]
 
     elseif pointType == "reinforce" then
         currentTable = DYN_NPC_SQUADS.teamReinforcePoints[dynTeam]
+
+    elseif pointType == "nearby" then
+        nearbyOnly = true
+        currentTable = DYN_NPC_SQUADS.teamNearReinforcePoints[dynTeam]
 
     end
 
@@ -724,8 +745,9 @@ local function npcFillPointCache( npc, pointType )
     local neverReallyClose = true
     local point
     -- go thru, newest to oldest
-    for placedTime, pos in SortedPairs( currentTable, true ) do
+    for placedTime, pointDat in SortedPairs( currentTable, true ) do
         local age = CurTime() - placedTime
+        local pos = pointDat.pos
         -- we found a good point already, and this one's really old, just delete it
         if age > 480 and point then
             currentTable[placedTime] = nil
@@ -747,6 +769,16 @@ local function npcFillPointCache( npc, pointType )
             -- pick either newest, or closest if one is right next to us
             -- makes squads stick around one area for a little bit longer
             local currDistSqr = pos:DistToSqr( npcsPos )
+            if nearbyOnly then -- special point type
+                local pointsCutoff = pointDat.nearbyCutoffDist or nearbyStartingDist
+                pointDat.nearbyCutoffDist = pointsCutoff + nearbyStepSize
+
+                if currDistSqr > pointsCutoff^2 then continue end
+                if pointsCutoff > nearbyMaxDist then currentTable[placedTime] = nil continue end -- this nearby point is not nearby anything
+
+                debugoverlay.Line( pos, npcsPos, 5, color_white, true )
+
+            end
             local reallyClose = currDistSqr < reallyCloseDistSqr
             if reallyClose then
                 reallyCloseDistSqr = currDistSqr
@@ -773,24 +805,53 @@ local function npcFillPointCache( npc, pointType )
 end
 
 -- call for backup!
-local function saveEnemyContact( me, enemy )
+local function saveEnemyContact( me, enemy, reinforceType )
     if not me:Visible( enemy ) then return end
-
     local enemyPos = enemy:GetPos()
-    if me.IsOnGround and me:IsOnGround() then
+
+    local canFlankPoint
+    local canReinforcePoint
+    local distSqrToEnemy = me:GetPos():DistToSqr( enemyPos )
+
+    if reinforceType == "nearbyreinforce" then
+        if distSqrToEnemy < 3000^2 then
+            canReinforcePointNearby = true
+
+        end
+
+    elseif reinforceType == "globalreinforce" then
+        if enemy.IsOnGround and enemy:IsOnGround() then
+            canFlankPoint = true
+
+        end
+
+        if distSqrToEnemy < 3000^2 then
+            canReinforcePoint = true
+
+        end
+        me.lastAssaultPosSaveTime = CurTime()
+
+    end
+
+    if canFlankPoint then
         saveFlankPoint( me, enemyPos, 0 )
 
-    end
-
-    if me:GetPos():DistToSqr( enemyPos ) < 3000^2 then
+    elseif canReinforcePoint then
         saveReinforcePoint( me, me:GetPos(), 0 )
 
-    end
-    me.lastAssaultPosSaveTime = CurTime()
+    elseif canReinforcePointNearby then
+        if enemy.IsOnGround and enemy:IsOnGround() then
+            saveNearReinforcePoint( me, enemyPos, 0 )
 
+        else
+            saveNearReinforcePoint( me, me:GetPos(), 0 )
+
+        end
+    end
 end
 
 local pointSaveInterval = 2.5
+local pointSaveIntervalNearby = 35
 
 local function npcCanSavePointSimple( me )
     if not doassaultingBool then return false end
@@ -815,6 +876,18 @@ local function npcCanSavePoint( me )
     local members = ai.GetSquadMembers( squad )
     if not members then return false end
 
+
+    local currCount = #members
+    local oldCount = me.oldSquadMemberCount or 0
+    me.oldSquadMemberCount = currCount
+
+    local losingMembers = currCount < oldCount
+    local oneMember = currCount <= 1
+    if losingMembers or oneMember then return true, "globalreinforce" end
+
+
+    if ( lastSaved + pointSaveIntervalNearby ) > CurTime() then return false end
+
     for _, member in ipairs( members ) do
         if member.Health then
             currHealth = currHealth + member:Health()
@@ -823,15 +896,10 @@ local function npcCanSavePoint( me )
     end
     local oldHealth = me.oldSquadMemberHealth or 0
     me.oldSquadMemberHealth = currHealth
-    local losingHealth = currHealth < oldHealth
-    if losingHealth then return true end
 
-    local currCount = #members
-    local oldCount = me.oldSquadMemberCount or 0
-    me.oldSquadMemberCount = currCount
-    local losingMembers = currCount < oldCount
-    local oneMember = currCount <= 1
-    if losingMembers or oneMember then return true end
+    local losingHealth = currHealth < oldHealth
+    if losingHealth then return true, "nearbyreinforce" end
+
 
     return false
 
@@ -846,8 +914,6 @@ local function npcAlertThink( npc )
 
     end
 end
-
-local classes
 
 -- main function that loops on every npc with a valid squad, everything above/below is for this
 -- return nil to treat it as a halting error, and teardown the timer for this npc.
@@ -870,10 +936,10 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- used by npcs with no movement capabilites or that crash the game when their squad is set.
     if me.dynsquads_OnlyCallForBackup then
-        if not me.dynSquadTeam then print( me ) return nil, "ignore, only calling backup, but not in a team to call for backup within." end
+        if not me.dynSquadTeam then return nil, "ignore, only calling backup, but not in a team to call for backup within." end
         local myEnemy = me:GetEnemy()
         if IsValid( myEnemy ) and npcCanSavePointSimple( me ) then
-            saveEnemyContact( me, myEnemy )
+            saveEnemyContact( me, myEnemy, "globalreinforce" )
 
         end
 
@@ -981,8 +1047,18 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
         end
         if alert and fighting then
             npcAlertThink( me )
-            if IsValid( myEnemy ) and npcCanSavePoint( me ) then
-                saveEnemyContact( me, myEnemy )
+            local canReinforce, reinforceType
+            if IsValid( myEnemy ) then
+                canReinforce, reinforceType = npcCanSavePoint( me )
+
+            end
+            if not canReinforce and me.wasTraversingToAssault then
+                canReinforce = true
+                reinforceType = "nearbyreinforce"
+
+            end
+            if canReinforce then
+                saveEnemyContact( me, myEnemy, reinforceType )
 
             end
             if me.wasTraversingToAssault then
@@ -1048,8 +1124,8 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
                     end
                 -- look for assaults
                 elseif doassaultingBool and not point and ( me.nextCacheAttempt or 0 ) < CurTime() then
-                    local choices = { [0] = "flank", [1] = "reinforce" }
-                    local choice = choices[ math.random( 0, 1 ) ]
+                    local choices = { [1] = "flank", [2] = "reinforce", [3] = "nearby" }
+                    local choice = choices[ math.random( 1, 3 ) ]
 
                     local success, newPoint = npcFillPointCache( me, choice )
                     if success and newPoint then
