@@ -10,6 +10,7 @@ local developer = CreateConVar( "npc_dynsquads_developer", 0, FCVAR_ARCHIVE, "En
 local doenable = CreateConVar( "npc_dynsquads_enabled", 1, FCVAR_ARCHIVE, "Enable/disable the entire 'dynamic npc squads' addon,", 0, 1 )
 local dowandering = CreateConVar( "npc_dynsquads_dowandering", 1, FCVAR_ARCHIVE, "Should dynsquads wander around the map?" )
 local doassaulting = CreateConVar( "npc_dynsquads_doassaults", 1, FCVAR_ARCHIVE, "Should dynsquads call for backup?" )
+local playerspawnedonly = CreateConVar( "npc_dynsquads_playerspawnedonly", 0, FCVAR_ARCHIVE, "Only do dynsquad stuff on things spawned by players? Fixes dynsquads getting it's fingers into scripted npcs" )
 
 local enabledBool = doenable:GetBool()
 cvars.AddChangeCallback( "npc_dynsquads_enabled", function( _, _, new )
@@ -36,6 +37,12 @@ cvars.AddChangeCallback( "npc_dynsquads_doassaults", function( _, _, new )
 
 end, "dynsquads_detectchange" )
 
+local playerSpawnedOnlyBool = playerspawnedonly:GetBool()
+cvars.AddChangeCallback( "npc_dynsquads_playerspawnedonly", function( _, _, new )
+    playerSpawnedOnlyBool = tobool( new )
+
+end, "dynsquads_detectchange" )
+
 local COND_NEW_ENEMY = 26
 local COND_SEE_ENEMY = 10
 local COND_SEE_FEAR = 8
@@ -56,6 +63,7 @@ local interruptConditions = {
 }
 
 
+-- awto re fresh
 DYN_NPC_SQUADS.dynSquadLeaders = DYN_NPC_SQUADS.dynSquadLeaders or {}
 DYN_NPC_SQUADS.allNpcs = DYN_NPC_SQUADS.allNpcs or {}
 
@@ -184,7 +192,7 @@ local function npcSetDynSquad( npc, squad )
     local count = DYN_NPC_SQUADS.dynSquadCounts[ squad ] or 0
     DYN_NPC_SQUADS.dynSquadCounts[ squad ] = count + 1
 
-    dupeData = { ["squadname"] = squad }
+    local dupeData = { squadname = squad }
     duplicator.StoreEntityModifier( npc, "dynsquads_squadinfo", dupeData )
 
     if developerBool then
@@ -926,10 +934,12 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     -- stop here if npc doesnt have "squadname" keyvalue or GetSquad function 
     if not squad then return nil, "cant squad, lua" end
 
+    -- bugged npc
     if not me:IsInWorld() then return end
 
     -- just makes the system wait
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
+    if playerSpawnedOnlyBool and me.dynsquads_IsMapCreated then return true, "ignore, map created convar" end
     if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
     -- used by npcs with no movement capabilites or that crash the game when their squad is set.
@@ -1387,6 +1397,36 @@ end
 
 hook.Add( "Tick", "STRAW_dynamic_npc_squads_think", dynSquadThink )
 
+local function isMapCreated( me )
+    if me.dynsquads_IsMapCreated then return true end -- pasted in, technically player created so we have to save the state thru the dupe
+
+    local mapId = me:MapCreationID()
+    if mapId >= 0 then
+        return true
+
+    end
+    local myOwner = me:GetOwner()
+    if IsValid( myOwner ) and myOwner:MapCreationID() >= 0 then -- npc_template_maker or whatever else
+        return true
+
+    end
+end
+
+local function handleMapCreated( me )
+    local mapCreated = isMapCreated( me )
+
+    if mapCreated then
+        me.dynsquads_IsMapCreated = true
+
+        local dupeData = { dynsquads_IsMapCreated = true }
+        duplicator.StoreEntityModifier( me, "dynsquads_ismapcreated", dupeData )
+
+    else
+        me.dynsquads_IsMapCreated = nil
+
+    end
+end
+
 local function dynSquadInitializeNpc( me )
     if not IsValid( me ) then return end
 
@@ -1450,23 +1490,32 @@ hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity 
         local class = entity:GetClass()
         if backupOnlyClasses[class] or not IsValid( entity:GetPhysicsObject() ) then entity.dynsquads_OnlyCallForBackup = true end
 
+        handleMapCreated( entity )
+
         dynSquadInitializeNpc( entity )
 
     end )
 end )
 
 -- sort of dupe support
-local function dynSquadPasteSquad( _, pasted, data )
+local function pasteSquad( _, pasted, data )
     timer.Simple( 0, function()
         if not IsValid( pasted ) then return end
-        if not istable( data ) then return end
 
-        if data["squadname"] then
+        local squadName = data.squadname
+        if squadName then
             pasted.dynHasBeenProcessed = nil
             pasted.dynSquadTeam = nil
-            npcSetDynSquad( pasted, data["squadname"] )
+            npcSetDynSquad( pasted, squadName )
 
         end
     end )
 end
-duplicator.RegisterEntityModifier( "dynsquads_squadinfo", dynSquadPasteSquad )
+duplicator.RegisterEntityModifier( "dynsquads_squadinfo", pasteSquad )
+
+-- track map created ents thru saves in multiplayer
+local function pasteIsMapCreated( _, pasted, data )
+    pasted.dynsquads_IsMapCreated = data.dynsquads_IsMapCreated or nil
+
+end
+duplicator.RegisterEntityModifier( "dynsquads_ismapcreated", pasteIsMapCreated )
