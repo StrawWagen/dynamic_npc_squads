@@ -10,7 +10,7 @@ local developer = CreateConVar( "npc_dynsquads_developer", 0, FCVAR_ARCHIVE, "En
 local doenable = CreateConVar( "npc_dynsquads_enabled", 1, FCVAR_ARCHIVE, "Enable/disable the entire 'dynamic npc squads' addon,", 0, 1 )
 local dowandering = CreateConVar( "npc_dynsquads_dowandering", 1, FCVAR_ARCHIVE, "Should dynsquads wander around the map?" )
 local doassaulting = CreateConVar( "npc_dynsquads_doassaults", 1, FCVAR_ARCHIVE, "Should dynsquads call for backup?" )
-local playerspawnedonly = CreateConVar( "npc_dynsquads_playerspawnedonly", 0, FCVAR_ARCHIVE, "Only do dynsquad stuff on things spawned by players? Fixes dynsquads getting it's fingers into scripted npcs" )
+local ignoremapcreated = CreateConVar( "npc_dynsquads_ignoremapcreated", 0, FCVAR_ARCHIVE, "Never do stuff on map-spawned npcs? Fixes dynsquads getting it's fingers into map-scripted npcs" )
 
 local enabledBool = doenable:GetBool()
 cvars.AddChangeCallback( "npc_dynsquads_enabled", function( _, _, new )
@@ -37,9 +37,9 @@ cvars.AddChangeCallback( "npc_dynsquads_doassaults", function( _, _, new )
 
 end, "dynsquads_detectchange" )
 
-local playerSpawnedOnlyBool = playerspawnedonly:GetBool()
-cvars.AddChangeCallback( "npc_dynsquads_playerspawnedonly", function( _, _, new )
-    playerSpawnedOnlyBool = tobool( new )
+local ignoreMapCreatedBool = ignoremapcreated:GetBool()
+cvars.AddChangeCallback( "npc_dynsquads_ignoremapcreated", function( _, _, new )
+    ignoreMapCreatedBool = tobool( new )
 
 end, "dynsquads_detectchange" )
 
@@ -939,7 +939,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- just makes the system wait
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
-    if playerSpawnedOnlyBool and me.dynsquads_IsMapCreated then return true, "ignore, map created convar" end
+    if ignoreMapCreatedBool and me.dynsquads_IsMapCreated then return true, "ignore, map created convar" end
     if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
     -- used by npcs with no movement capabilites or that crash the game when their squad is set.
