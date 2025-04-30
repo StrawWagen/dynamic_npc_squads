@@ -939,11 +939,15 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     -- just makes the system wait
     if me.DynamicNpcSquadsIgnore then return true, "ignore" end
-    if ignoreMapCreatedBool and me.dynsquads_IsMapCreated then return true, "ignore, map created convar" end
     if hook.Run( "dynsquads_blocksquadthinking", me ) == true then return true, "ignore, hook" end
 
+    local backupOnly = me.dynsquads_OnlyCallForBackup
+    if ignoreMapCreatedBool and not backupOnly and me.dynsquads_IsMapCreated then
+        backupOnly = true
+
+    end
     -- used by npcs with no movement capabilites or that crash the game when their squad is set.
-    if me.dynsquads_OnlyCallForBackup then
+    if backupOnly then
         if not me.dynSquadTeam then return nil, "ignore, only calling backup, but not in a team to call for backup within." end
         local myEnemy = me:GetEnemy()
         if IsValid( myEnemy ) and npcCanSavePointSimple( me ) then
@@ -951,7 +955,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
         end
 
-        return true
+        return true, "only callin for backup!"
 
     end
 
