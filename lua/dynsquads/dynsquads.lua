@@ -256,12 +256,24 @@ function invalidSquadCheck( me, squad )
     end
 end
 
-local function canDynSquadsMove( me, state )
+local BUSY_SCHEDULES = {
+    [-1] = true, -- asleep, zzzzzzzzzzz
+    [SCHED_SCENE_GENERIC] = true,
+    [SCHED_SCRIPTED_CUSTOM_MOVE] = true,
+    [SCHED_SCRIPTED_FACE] = true,
+    [SCHED_SCRIPTED_RUN] = true,
+    [SCHED_SCRIPTED_WAIT] = true,
+    [SCHED_SCRIPTED_WALK] = true,
+    [SCHED_RELOAD] = true,
+
+}
+
+local function canMoveThis( me, state )
     state = state or me:GetNPCState()
     if state == NPC_STATE_SCRIPT then return end
     -- asleep check
-    if me:IsCurrentSchedule( -1 ) then return end
-    if me:IsCurrentSchedule( SCHED_SCRIPTED_WAIT ) then return end
+    local mySched = me:GetCurrentSchedule()
+    if BUSY_SCHEDULES[mySched] then return end
     if me.dynSquads_DontMove and me.dynSquads_DontMove > CurTime() then return end
     if hook.Run( "dynsquads_blockmovement", me ) == true then return end
 
@@ -274,7 +286,7 @@ local function tellToMove( teller, telee )
     if not IsValid( teller ) or not IsValid( telee ) then return end
     if not teller:IsNPC() or not telee:IsNPC() then return end
     if not DYN_NPC_SQUADS.NpcsAreChummy( teller, telee ) then return end
-    if not canDynSquadsMove( telee ) then return end
+    if not canMoveThis( telee ) then return end
 
     telee:SetSaveValue( "vLastKnownLocation", teller:GetPos() )
     telee:SetSchedule( SCHED_TAKE_COVER_FROM_ORIGIN )
@@ -396,7 +408,7 @@ end
 local defDist = 512
 
 local function npcWanderForward( me, refent, dist )
-    if not canDynSquadsMove( me ) then return end
+    if not canMoveThis( me ) then return end
     if me:GetPathDistanceToGoal() > 25 then return end
 
     if not IsValid( refent ) then return end
@@ -415,7 +427,7 @@ local function npcWanderForward( me, refent, dist )
 end
 
 local function npcWanderAwayFrom( me, pos )
-    if not canDynSquadsMove( me ) then return end
+    if not canMoveThis( me ) then return end
     if me:GetPathDistanceToGoal() > 25 then return end
 
     me:SetSchedule( SCHED_IDLE_WALK )
@@ -438,7 +450,7 @@ local failSched = SCHED_FAIL
 -- go_run lacks interrupt conditions, so this has to be called if the npc takes damage, etc
 local function npcCancelGo( me )
     if not me.wasDoingConfirmedDynsquadsGo then return end
-    if not canDynSquadsMove( me ) then return end
+    if not canMoveThis( me ) then return end
     me.wasDoingConfirmedDynsquadsGo = nil
 
     local isSched = me:IsCurrentSchedule( goRunSched )
@@ -474,7 +486,7 @@ hook.Add( "EntityTakeDamage", "dynsquads_breaktrances", function( damaged )
 end )
 
 local function npcPathRunToPos( me, pos )
-    if not canDynSquadsMove( me ) then return end
+    if not canMoveThis( me ) then return end
 
     if me:IsCurrentSchedule( failSched ) then return end
 
@@ -500,7 +512,7 @@ local function npcPathRunToPos( me, pos )
 end
 
 local function npcStandWatch( me, myLeader )
-    if not canDynSquadsMove( me ) then return end
+    if not canMoveThis( me ) then return end
 
     local targetSched = standScheds[me:GetNPCState()] or SCHED_ALERT_STAND
 
@@ -973,7 +985,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
     local caps = me:CapabilitiesGet()
     local myState = me:GetNPCState()
-    local canMove = canDynSquadsMove( me )
+    local canMove = canMoveThis( me )
     local ableToAct = enabledAi() and canMove
     local count = DYN_NPC_SQUADS.dynSquadCounts[squad] or 0
     local myLeader = ai.GetSquadLeader( squad )
@@ -1023,7 +1035,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local alert = npcIsAlert( me )
     local idle = myState == NPC_STATE_IDLE
     local fighting = validEnemy
-    local needsToForceIdle = ( lastAlertTime + fearfulness ) < CurTime() and not fighting and not idle
+    local forceDoneShellShocked = ( lastAlertTime + fearfulness ) < CurTime() and not fighting
 
     -- eg, npc_citizen no weapons
     if canUseWeapon and not hasWep then
@@ -1083,7 +1095,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
             end
         end
         if ableToAct then
-            if needsToForceIdle then
+            if forceDoneShellShocked then
                 -- dont be shellshocked for too long
                 me:SetNPCState( NPC_STATE_IDLE )
                 DYN_NPC_SQUADS.NpcPlaySound( me, "beganwandering" )
@@ -1221,7 +1233,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
             local distToWhereLeaderWants = compareToLeaderWants:DistToSqr( whereLeaderWantsUs )
             local sqrDistToLeader = myPos:DistToSqr( leadersRealPos )
 
-            if needsToForceIdle then
+            if forceDoneShellShocked then
                 -- followers stop being shellshocked a bit after their leaders
                 local fearfulnessStopHuddling = fearfulness + 8
 
@@ -1231,7 +1243,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
 
                 end
             -- leader is assaulting
-            elseif idle and doassaultingBool and leadersPoint and canDynSquadsMove( myLeader ) then
+            elseif idle and doassaultingBool and leadersPoint and canMoveThis( myLeader ) then
                 -- handle "follow the leader!" sounds
                 local nextNotify = me.nextPointNotify or 0
                 if leadersPoint ~= me.notifedPoint and nextNotify < CurTime() then
