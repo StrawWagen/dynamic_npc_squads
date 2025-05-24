@@ -1035,7 +1035,7 @@ function DYN_NPC_SQUADS.npcDoSquadThink( me )
     local alert = npcIsAlert( me )
     local idle = myState == NPC_STATE_IDLE
     local fighting = validEnemy
-    local forceDoneShellShocked = ( lastAlertTime + fearfulness ) < CurTime() and not fighting
+    local forceDoneShellShocked = ( lastAlertTime + fearfulness ) < CurTime() and not fighting and not idle
 
     -- eg, npc_citizen no weapons
     if canUseWeapon and not hasWep then
