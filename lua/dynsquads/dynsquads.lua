@@ -1437,6 +1437,8 @@ local function handleMapCreated( me )
         local dupeData = { dynsquads_IsMapCreated = true }
         duplicator.StoreEntityModifier( me, "dynsquads_ismapcreated", dupeData )
 
+        return true
+
     else
         me.dynsquads_IsMapCreated = nil
 
@@ -1494,6 +1496,11 @@ local backupOnlyClasses = {
 
 }
 
+local exceptionsWhenPlayerMade = { -- striders crash alot if you try and make them path when map created
+    ["npc_strider"] = true,
+
+}
+
 -- introduces npcs to the system
 hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity )
     if not IsValid( entity ) then return end
@@ -1503,10 +1510,17 @@ hook.Add( "OnEntityCreated", "dynamic_npc_squads_acquirenpcs", function( entity 
     local rand = math.random( 0, timerInterval )
     timer.Simple( 1.5 + rand, function()
         if not npcSquad( entity ) then return end
-        local class = entity:GetClass()
-        if backupOnlyClasses[class] or not IsValid( entity:GetPhysicsObject() ) then entity.dynsquads_OnlyCallForBackup = true end
 
-        handleMapCreated( entity )
+        local mapCreated = handleMapCreated( entity )
+
+        local class = entity:GetClass()
+        local backupOnly = backupOnlyClasses[class] or not IsValid( entity:GetPhysicsObject() ) -- likely to crash
+
+        if backupOnly and not mapCreated and exceptionsWhenPlayerMade[ class ] then -- striders crash sometimes when map created, they're also probably scripted by map to do stuff, don't mess with em!
+            backupOnly = false
+
+        end
+        if backupOnly then entity.dynsquads_OnlyCallForBackup = true end
 
         dynSquadInitializeNpc( entity )
 
