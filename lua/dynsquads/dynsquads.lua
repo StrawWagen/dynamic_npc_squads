@@ -869,7 +869,7 @@ local function saveEnemyContact( me, enemy, reinforceType )
 end
 
 local pointSaveInterval = 2.5
-local pointSaveIntervalNearby = 35
+local pointSaveIntervalNearby = 20
 
 local function npcCanSavePointSimple( me )
     if not doassaultingBool then return false end
